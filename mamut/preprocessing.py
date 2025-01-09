@@ -1,27 +1,30 @@
-import pandas as pd
+from typing import List, Literal, Optional, Tuple
+
 import numpy as np
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split
+import pandas as pd
 from scipy.stats import shapiro
-from typing import List, Tuple, Optional, Literal
+from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import SelectFromModel
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, StandardScaler
 
 
 class DataPreprocessor:
     def __init__(
         self,
-        num_imputation: Literal['mean', 'median', 'constant'] = 'mean',
-        cat_imputation: Literal['most_frequent', 'constant'] = 'most_frequent',
-        scaling_method: Literal['standard', 'minmax', None] = None,
+        numeric_features: List[str],
+        categorical_features: List[str],
+        num_imputation: Literal["mean", "median", "constant"] = "mean",
+        cat_imputation: Literal["most_frequent", "constant"] = "most_frequent",
+        scaling_method: Literal["standard", "minmax", None] = None,
         test_size: Optional[float] = 0.2,
-        numeric_features: List[str] = [], categorical_features: List[str] = [],
-        correlation_threshold: float = 0.98, feature_selection: bool = True,
+        correlation_threshold: float = 0.98,
+        feature_selection: bool = True,
         feature_selection_treshold: float = 0.8,
-        random_state: Optional[int] = None
+        random_state: Optional[int] = None,
     ) -> None:
         """
         Initialize the DataPreprocessor.
@@ -48,9 +51,9 @@ class DataPreprocessor:
 
     @staticmethod
     def validate_inputs(
-        num_imputation: Literal['mean', 'median', 'constant'],
-        cat_imputation: Literal['most_frequent', 'constant'],
-        scaling_method: Literal['standard', 'minmax', None]
+        num_imputation: Literal["mean", "median", "constant"],
+        cat_imputation: Literal["most_frequent", "constant"],
+        scaling_method: Literal["standard", "minmax", None],
     ) -> None:
         """
         Validate the input parameters.
@@ -65,18 +68,24 @@ class DataPreprocessor:
         Raises:
         - ValueError: If any parameter is invalid.
         """
-        valid_num_strategies = ['mean', 'median', 'constant']
-        valid_cat_strategies = ['most_frequent', 'constant']
-        valid_scaling_methods = ['standard', 'minmax', None]
+        valid_num_strategies = ["mean", "median", "constant"]
+        valid_cat_strategies = ["most_frequent", "constant"]
+        valid_scaling_methods = ["standard", "minmax", None]
 
         if num_imputation not in valid_num_strategies:
-            raise ValueError(f"num_strategy must be one of {valid_num_strategies}, got '{num_strategy}'.")
+            raise ValueError(
+                f"num_strategy must be one of {valid_num_strategies}, got '{num_imputation}'."
+            )
 
         if cat_imputation not in valid_cat_strategies:
-            raise ValueError(f"cat_strategy must be one of {valid_cat_strategies}, got '{cat_strategy}'.")
+            raise ValueError(
+                f"cat_strategy must be one of {valid_cat_strategies}, got '{cat_imputation}'."
+            )
 
         if scaling_method not in valid_scaling_methods:
-            raise ValueError(f"scaling_method must be one of {valid_scaling_methods}, got '{scaling_method}'.")
+            raise ValueError(
+                f"scaling_method must be one of {valid_scaling_methods}, got '{scaling_method}'."
+            )
 
     @staticmethod
     def detect_outliers(series: pd.Series) -> bool:
@@ -92,7 +101,7 @@ class DataPreprocessor:
         Q1 = series.quantile(0.25)
         Q3 = series.quantile(0.75)
         IQR = Q3 - Q1
-        outliers = ((series < (Q1 - 1.5 * IQR)) | (series > (Q3 + 1.5 * IQR)))
+        outliers = (series < (Q1 - 1.5 * IQR)) | (series > (Q3 + 1.5 * IQR))
         return outliers.any()
 
     @staticmethod
@@ -124,14 +133,20 @@ class DataPreprocessor:
         """
         scalers = {}
         if self.scaling_method:
-            scaler = StandardScaler() if self.scaling_method == 'standard' else MinMaxScaler()
+            scaler = (
+                StandardScaler()
+                if self.scaling_method == "standard"
+                else MinMaxScaler()
+            )
             scalers = {feature: scaler for feature in self.num_features}
         else:
             for feature in self.num_features:
                 series = X[feature]
                 has_outliers = self.detect_outliers(series)
                 is_gaussian = self.is_gaussian(series)
-                scalers[feature] = StandardScaler() if has_outliers or is_gaussian else MinMaxScaler()
+                scalers[feature] = (
+                    StandardScaler() if has_outliers or is_gaussian else MinMaxScaler()
+                )
         return scalers
 
     def create_pipeline(self, X: pd.DataFrame) -> Pipeline:
@@ -148,20 +163,24 @@ class DataPreprocessor:
         """
         scalers = self.choose_scaler(X)
         num_transformer_steps = [
-            ('imputer', SimpleImputer(strategy=self.num_imputation))
+            ("imputer", SimpleImputer(strategy=self.num_imputation))
         ]
         for feature in self.num_features:
-            num_transformer_steps.append((f'scaler_{feature}', scalers[feature]))
+            num_transformer_steps.append((f"scaler_{feature}", scalers[feature]))
 
         num_transformer = Pipeline(num_transformer_steps)
-        cat_transformer = Pipeline([
-            ('imputer', SimpleImputer(strategy=self.cat_imputation)),
-            ('onehot', OneHotEncoder(handle_unknown='ignore'))
-        ])
-        preprocessor = ColumnTransformer([
-            ('num', num_transformer, self.num_features),
-            ('cat', cat_transformer, self.cat_features)
-        ])
+        cat_transformer = Pipeline(
+            [
+                ("imputer", SimpleImputer(strategy=self.cat_imputation)),
+                ("onehot", OneHotEncoder(handle_unknown="ignore")),
+            ]
+        )
+        preprocessor = ColumnTransformer(
+            [
+                ("num", num_transformer, self.num_features),
+                ("cat", cat_transformer, self.cat_features),
+            ]
+        )
         return preprocessor
 
     def remove_highly_correlated_features(
@@ -180,8 +199,14 @@ class DataPreprocessor:
         X_copy = X[self.num_features].copy()
         corr_matrix = X_copy.corr().abs()
         upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-        to_drop = [column for column in upper.columns if any(upper[column] > self.correlation_threshold)]
-        return X.drop(columns=to_drop), [feature for feature in self.num_features if feature not in to_drop]
+        to_drop = [
+            column
+            for column in upper.columns
+            if any(upper[column] > self.correlation_threshold)
+        ]
+        return X.drop(columns=to_drop), [
+            feature for feature in self.num_features if feature not in to_drop
+        ]
 
     def select_important_features(
         self, X_train: np.ndarray, X_test: np.ndarray, y_train: pd.Series
@@ -207,7 +232,9 @@ class DataPreprocessor:
         importances = rf.feature_importances_
         num_features_to_select = int(len(importances) * self.feature_selection_treshold)
 
-        selector = SelectFromModel(rf, max_features=num_features_to_select, threshold=-np.inf)
+        selector = SelectFromModel(
+            rf, max_features=num_features_to_select, threshold=-np.inf
+        )
         selector.fit(X_train, y_train.values.ravel())
 
         selected_columns = selector.get_support(indices=True)
@@ -216,7 +243,6 @@ class DataPreprocessor:
 
         # selected_feature_names = [f"feature_{i}" for i in selected_columns]
         return X_train, X_test
-
 
     def fit_transform(
         self, X: pd.DataFrame, y: pd.Series
@@ -232,12 +258,13 @@ class DataPreprocessor:
         - X_train, X_test, y_train, y_test: Transformed and split data.
         """
         if not self.num_features:
-            self.num_features = X.select_dtypes(include=['number']).columns
+            self.num_features = X.select_dtypes(include=["number"]).columns
         if not self.cat_features:
-            self.cat_features = X.select_dtypes(exclude=['number']).columns
+            self.cat_features = X.select_dtypes(exclude=["number"]).columns
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=self.test_size,
-                                                            random_state=self.random_state)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=self.test_size, random_state=self.random_state
+        )
         X_train, self.num_features = self.remove_highly_correlated_features(X_train)
         self.fitted_pipeline = self.create_pipeline(X_train)
         X_train = self.fitted_pipeline.fit_transform(X_train)
@@ -259,6 +286,8 @@ class DataPreprocessor:
         - Transformed data.
         """
         if self.fitted_pipeline is None:
-            raise ValueError("Pipeline has not been fitted. Call 'fit_transform' first.")
+            raise ValueError(
+                "Pipeline has not been fitted. Call 'fit_transform' first."
+            )
 
         return self.fitted_pipeline.transform(X)
