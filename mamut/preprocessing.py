@@ -48,12 +48,17 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
         self.pca = pca
         self.random_state = random_state
 
+        self._num_steps = None
+        self._cat_steps = None
+        self._steps = None
+        self.pipeline_ = None
+
         if self.num_imputation not in self.imputer_mapping:
             raise KeyError(f"Invalid num_imputation strategy: {self.num_imputation}")
         if self.cat_imputation not in ["most_frequent", "constant"]:
             raise KeyError(f"Invalid cat_imputation strategy: {self.cat_imputation}")
 
-        self.pipeline_ = None
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         self._steps = []
         self._num_steps = [
             ("imputer", self.imputer_mapping[self.num_imputation]()),
@@ -65,7 +70,6 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
             ("onehot", OneHotEncoder(drop="first", handle_unknown="error")),
         ]
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         if not self.numeric_features:
             self.numeric_features = X.select_dtypes(include="number").columns.tolist()
         if not self.categorical_features:
@@ -104,7 +108,7 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
     def transform(self, X: pd.DataFrame, y: pd.Series) -> (np.ndarray, np.ndarray):
         if not self.pipeline_:
             raise RuntimeError("The pipeline has not been fitted yet.")
-        return self.pipeline_.transform(X), y
+        return self.pipeline_.transform(X)
 
     def fit_transform(self, X: pd.DataFrame, y: pd.Series) -> (np.ndarray, np.ndarray):
         self.fit(X, y)
