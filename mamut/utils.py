@@ -1,8 +1,21 @@
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    confusion_matrix,
+    f1_score,
+    jaccard_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+    roc_curve,
+)
+
 lr_params = {
     "C": (1e-4, 1e4, "log"),
     "l1_ratio": (1e-4, 1.0, "log"),
     "class_weight": (["balanced"], "categorical"),
-    "max_iter": (1500, 1500, "int"),
+    "max_iter": (1000, 1000, "int"),
     "solver": (["saga", "lbfgs", "liblinear"], "categorical"),
 }
 
@@ -38,47 +51,61 @@ svc_params = {
 lgb_params = {
     "num_leaves": (15, 255, "int"),
     "learning_rate": (1e-4, 0.4, "log"),
-    "n_estimators": (10, 2000, "int"),
-    "max_depth": (-1, 15, "int"),
-    "min_child_samples": (5, 100, "int"),
+    "n_estimators": (10, 1000, "int"),
+    "max_depth": (0, 10, "int"),
+    "min_child_samples": (5, 50, "int"),
     "subsample": (0.4, 1.0, "float"),
     "colsample_bytree": (0.4, 1.0, "float"),
     "reg_alpha": (1e-4, 10.0, "log"),
     "reg_lambda": (1e-4, 10.0, "log"),
 }
 
-cb_params = {
-    "iterations": (10, 2000, "int"),
-    "depth": (3, 10, "int"),
-    "learning_rate": (1e-4, 0.4, "log"),
-    "l2_leaf_reg": (1.0, 10.0, "log"),
-    "border_count": (32, 255, "int"),
-    "subsample": (0.5, 1.0, "float"),
-    "colsample_bylevel": (0.4, 1.0, "float"),
-}
-
 mlp_params = {
-    "hidden_layer_sizes": ([(50,), (100,), (200,)], "categorical"),
+    "hidden_layer_sizes": ([(32,), (64,), (128,), (256,), (32,16), (32,32), (64,32), (64,64)], "categorical"),
     "activation": (["identity", "logistic", "tanh", "relu"], "categorical"),
     "solver": (["lbfgs", "sgd", "adam"], "categorical"),
     "alpha": (1e-5, 1e-2, "log"),
     "learning_rate": (["constant", "invscaling", "adaptive"], "categorical"),
     "learning_rate_init": (1e-4, 1e-1, "log"),
     "power_t": (0.1, 0.9, "float"),
-    "max_iter": (200, 2000, "int"),
+    "max_iter": (200, "int"), # TODO: potentially increase
     "momentum": (0.5, 0.9, "float"),
+}
+
+lda_params = {
+    "solver": (["lsqr", "eigen"], "categorical"),
+    "shrinkage": (["auto", None], "categorical"),
+}
+
+gnb_params = {
+    "var_smoothing": (1e-9, 1e-5, "log"),
+}
+
+knn_params = {
+    "n_neighbors": (1, 30, "int"),
 }
 
 model_param_dict = {
     "LogisticRegression": lr_params,
+    "LinearDiscriminantAnalysis": lda_params,
     "RandomForestClassifier": tree_params,
     "SVC": svc_params,
-    "XGBClassifier": xgb_params,
-    "LGBMClassifier": lgb_params,
-    "CatBoostClassifier": cb_params,
+    # "XGBClassifier": xgb_params,
+    # "LGBMClassifier": lgb_params,
     "MLPClassifier": mlp_params,
+    "GaussianNB": gnb_params,
+    "KNeighborsClassifier": knn_params,
 }
 
+metric_dict = {
+    "accuracy": accuracy_score,
+    "precision": precision_score,
+    "recall": recall_score,
+    "f1": f1_score,
+    "balanced_accuracy": balanced_accuracy_score,
+    "jaccard": jaccard_score,
+    "roc_auc": roc_auc_score,
+}
 
 def sample_parameter(trial, param_name, value):
     """Sample a parameter value based on its distribution type."""
@@ -94,4 +121,15 @@ def sample_parameter(trial, param_name, value):
         options, dist_type = value
         return trial.suggest_categorical(param_name, options)
     else:
-        raise ValueError("Invalid parameter value")
+        raise ValueError("Invalid hyperparameter search space.")
+
+
+def adjust_search_spaces(param_dict, model):
+    if isinstance(model, LogisticRegression):
+        if param_dict["solver"] == "saga":
+            param_dict["penalty"] = "elasticnet"
+        else:
+            param_dict["penalty"] = "l2"
+            param_dict["l1_ratio"] = None
+
+    return param_dict

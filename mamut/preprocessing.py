@@ -38,7 +38,7 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
         cat_imputation: Literal["most_frequent", "constant"] = "constant",
         feature_selection: bool = False,
         pca: bool = False,
-        random_state: Optional[int] = None,
+        random_state: Optional[int] = 42,
     ) -> None:
         self.numeric_features = numeric_features
         self.categorical_features = categorical_features
