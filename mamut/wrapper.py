@@ -25,6 +25,7 @@ class Mamut:
             )
         self.model_selector = None
         self.fitted_models_ = None
+        self.best_model_ = None
         self.cv_scores_ = None
         self.results_df_ = None
 
@@ -46,6 +47,7 @@ class Mamut:
         self.cv_scores_ = cv_scores
 
         best_model = fitted_models[0]
+        self.best_model_ = best_model
 
         y_pred = best_model.predict(X_test)
         test_score = accuracy_score(y_test, y_pred)
