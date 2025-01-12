@@ -2,13 +2,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
-    confusion_matrix,
     f1_score,
     jaccard_score,
     precision_score,
     recall_score,
     roc_auc_score,
-    roc_curve,
 )
 
 lr_params = {
@@ -29,7 +27,7 @@ tree_params = {
 }
 
 xgb_params = {
-    "n_estimators": (10, 2000, "int"),
+    "n_estimators": (10, 1000, "int"),
     "learning_rate": (1e-4, 0.4, "log"),
     "subsample": (0.25, 1.0, "float"),
     "booster": (["gbtree"], "categorical"),
@@ -61,14 +59,17 @@ lgb_params = {
 }
 
 mlp_params = {
-    "hidden_layer_sizes": ([(32,), (64,), (128,), (256,), (32,16), (32,32), (64,32), (64,64)], "categorical"),
+    "hidden_layer_sizes": (
+        [(32,), (64,), (128,), (256,), (32, 16), (32, 32), (64, 32), (64, 64)],
+        "categorical",
+    ),
     "activation": (["identity", "logistic", "tanh", "relu"], "categorical"),
     "solver": (["lbfgs", "sgd", "adam"], "categorical"),
     "alpha": (1e-5, 1e-2, "log"),
     "learning_rate": (["constant", "invscaling", "adaptive"], "categorical"),
     "learning_rate_init": (1e-4, 1e-1, "log"),
     "power_t": (0.1, 0.9, "float"),
-    "max_iter": (200, "int"), # TODO: potentially increase
+    "max_iter": (200, 200, "int"),  # TODO: potentially increase
     "momentum": (0.5, 0.9, "float"),
 }
 
@@ -106,6 +107,7 @@ metric_dict = {
     "jaccard": jaccard_score,
     "roc_auc": roc_auc_score,
 }
+
 
 def sample_parameter(trial, param_name, value):
     """Sample a parameter value based on its distribution type."""

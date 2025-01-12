@@ -1,66 +1,67 @@
 import time
 import warnings
-from typing import List, Optional, Literal
+from typing import Callable, List, Literal, Optional
 
 import numpy as np
 import optuna
 import pandas as pd
-from optuna.samplers import TPESampler, RandomSampler
-
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.neural_network import MLPClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
-# import xgboost as xgb
-import lightgbm as lgb
-
-from sklearn.model_selection import cross_val_score, StratifiedKFold
+from optuna.samplers import RandomSampler, TPESampler
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
-    confusion_matrix,
     f1_score,
     jaccard_score,
     precision_score,
     recall_score,
     roc_auc_score,
-    roc_curve
 )
+from sklearn.model_selection import StratifiedKFold
 
-from mamut.utils import model_param_dict, sample_parameter, metric_dict, adjust_search_spaces
+from mamut.utils import adjust_search_spaces, model_param_dict, sample_parameter
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 warnings.filterwarnings("ignore")
 
 
 class ModelSelector:
-    def __init__(self, X_train,
-                 y_train,
-                 X_test,
-                 y_test,
-                 exclude_models: Optional[List[str]] = None,
-                 score_metric: Literal["accuracy", "precision", "recall", "f1",
-                 "balanced_accuracy", "jaccard", "roc_auc"] = "roc_auc",
-                 optimization_method: Literal["random_search", "bayes"] = "bayes",
-                 n_iterations: Optional[int] = 50,
-                 random_state: Optional[int] = 42):
+    def __init__(
+        self,
+        X_train,
+        y_train,
+        X_test,
+        y_test,
+        exclude_models: Optional[List[str]] = None,
+        optimization_method: Literal["random_search", "bayes"] = "bayes",
+        n_iterations: int = 50,
+        random_state: Optional[int] = 42,
+        score_metric: Callable = roc_auc_score,
+    ):
 
         self.X_train = X_train
-        self.y_train = y_train.values.ravel()
+        self.y_train = y_train
         self.X_test = X_test
-        self.y_test = y_test.values.ravel()
+        self.y_test = y_test
+        if not exclude_models:
+            exclude_models = []
+
         self.models = (
             # Include models that are in model_param_dict but not those in exclude_models
-            [eval(model)(random_state=random_state) if "random_state" in eval(model)().get_params() else eval(model)()
-             for model in model_param_dict.keys()
-             if model.__name__ not in exclude_models
-             ]
+            [
+                (
+                    eval(model)(random_state=random_state)
+                    if "random_state" in eval(model)().get_params()
+                    else eval(model)()
+                )
+                for model in model_param_dict.keys()
+                if model not in exclude_models
+            ]
         )
-        self.score_metric = metric_dict[score_metric]
-        self.optuna_sampler = TPESampler(seed=random_state) if optimization_method == "bayes" else RandomSampler(seed=random_state)
+        self.score_metric = score_metric
+        self.optuna_sampler = (
+            TPESampler(seed=random_state)
+            if optimization_method == "bayes"
+            else RandomSampler(seed=random_state)
+        )
         self.n_iterations = n_iterations
         self.SKF_ = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
 
@@ -92,7 +93,7 @@ class ModelSelector:
             model.fit(X_train_fold, y_train_fold)
             val_pred = model.predict(X_val_fold)
 
-            cv_scores.append(self.score_metric(self.y_train[val_idx], val_pred))
+            cv_scores.append(self.score_metric(y_val_fold, val_pred))
         mean_cv_score = np.mean(cv_scores)
 
         # Optimize wrt. the chosen metric
@@ -114,21 +115,23 @@ class ModelSelector:
         best_model = None
         score_for_best_model = 0
         params_for_best_model = None
-        fitted_models = []
+        fitted_models = {}
         training_report = pd.DataFrame()
         scores_on_test = {}
 
         for model in self.models:
             print(f"Optimizing model: {model.__class__.__name__}")
             params, score, duration = self.optimize_model(model)
-            print(f"Best parameters: {params}, score: {score:.4f} {self.score_metric.__name__}\n")
+            print(
+                f"Best parameters: {params}, score: {score:.4f} {self.score_metric.__name__}\n"
+            )
 
             # Reinitialize the model with the best parameters
             model.set_params(**params)
             model = model.__class__(**model.get_params())
 
             model.fit(self.X_train, self.y_train)
-            fitted_models.append(model)
+            fitted_models[model.__class__.__name__] = model
 
             score_on_test = self.score_metric(self.y_test, model.predict(self.X_test))
 
@@ -138,29 +141,45 @@ class ModelSelector:
                 params_for_best_model = params
 
             # Save the training report
-            scores_on_test = self.score_model_with_metrics(model)
-            training_report = training_report.append(
-                {
-                    "model": model.__class__.__name__,
-                    **scores_on_test,
-                    "duration": duration,
-                },
-                ignore_index=True
+            scores_on_test = self._score_model_with_metrics(model)
+
+            training_report = pd.concat(
+                [
+                    training_report,
+                    pd.DataFrame(
+                        [
+                            {
+                                "model": model.__class__.__name__,
+                                **scores_on_test,
+                                "duration": duration,
+                            }
+                        ]
+                    ),
+                ],
+                ignore_index=True,
             )
 
         print(
-            f"Found best model: {best_model.__class__.__name__} with parameters {params_for_best_model} and score {score_for_best_model:.4f}"
+            f"Found best model: {best_model.__class__.__name__} with parameters {params_for_best_model} "
+            f"and score {score_for_best_model:.4f}"
             f" {self.score_metric.__name__}. To access your best model use: get_best_model() function.\n\n"
             f"To create a powerful ensemble of models use: create_ensemble() function."
-        ) # TODO: Change instructions if needed
+        )  # TODO: Change instructions if needed
 
-        return best_model, params_for_best_model, score_for_best_model, fitted_models, training_report
+        return (
+            best_model,
+            params_for_best_model,
+            score_for_best_model,
+            fitted_models,
+            training_report,
+        )
 
-
-    def score_model_with_metrics(self, fitted_model):
+    def _score_model_with_metrics(self, fitted_model):
         # Check if the model is fitted
         if not hasattr(fitted_model, "predict"):
-            raise ValueError("The model is not fitted and can not be scored with any metric.")
+            raise ValueError(
+                "The model is not fitted and can not be scored with any metric."
+            )
 
         y_pred = fitted_model.predict(self.X_test)
         results = {
@@ -170,9 +189,14 @@ class ModelSelector:
             "recall_score": recall_score(self.y_test, y_pred, average="weighted"),
             "f1_score": f1_score(self.y_test, y_pred, average="weighted"),
             "jaccard_score": jaccard_score(self.y_test, y_pred, average="weighted"),
-            "roc_auc_score": roc_auc_score(self.y_test, y_pred, multi_class="ovr"), # TODO: Will not work for multi-class
+            "roc_auc_score": roc_auc_score(
+                self.y_test, y_pred, multi_class="ovr"
+            ),  # TODO: Will not work for multi-class
         }
 
         # Change the order of columns so that the self.score_metric is first
-        results = {self.score_metric.__name__: results.pop(self.score_metric.__name__), **results}
+        results = {
+            self.score_metric.__name__: results.pop(self.score_metric.__name__),
+            **results,
+        }
         return results
