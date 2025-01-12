@@ -150,7 +150,10 @@ class ModelSelector:
 
         print(
             f"Found best model: {best_model.__class__.__name__} with parameters {params_for_best_model} and score {score_for_best_model:.4f}"
-        )
+            f" {self.score_metric.__name__}. To access your best model use: get_best_model() function.\n\n"
+            f"To create a powerful ensemble of models use: create_ensemble() function."
+        ) # TODO: Change instructions if needed
+
         return best_model, params_for_best_model, score_for_best_model, fitted_models, training_report
 
 
