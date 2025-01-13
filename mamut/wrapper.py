@@ -56,13 +56,13 @@ class Mamut:
         self.X_test = None
         self.y_train = None
         self.y_test = None
-        self.ensemble = None
-        self.ensemble_models = None
 
         self.fitted_models_ = None
         self.best_model_ = None
         self.best_score_ = None
-        self.results_df_ = None
+        self.training_summary_ = None
+        self.ensemble_ = None
+        self.ensemble_models_ = None
 
     def fit(self, X: pd.DataFrame, y: pd.DataFrame):
         le = LabelEncoder()
@@ -98,22 +98,25 @@ class Mamut:
             params_for_best_model,
             score_for_best_model,
             fitted_models,
-            training_report,
+            training_summary,
         ) = self.model_selector.compare_models()
 
         self.fitted_models_ = [
             Pipeline([("preprocessor", self.preprocessor), ("model", model)])
-            for model in fitted_models
-        ]  # TODO: Check compliance with ensembles !
+            for model in fitted_models.values()
+        ]
+
         self.best_score_ = score_for_best_model
-        self.best_model_ = best_model
-        self.results_df_ = training_report
+        self.best_model_ = Pipeline([("preprocessor", self.preprocessor), ("model", best_model)])
+        self.training_summary_ = training_summary
 
         log.info(f"Best model: {best_model.__class__.__name__}")
 
         # TODO: Najprawodopodobniej evaluator nie musi zwracać DF, bo to jest w training_report
         # evaluator = ModelEvaluator(fitted_models, X_test, y_test)
         # evaluator.plot_results()
+        evaluator = ModelEvaluator(self.fitted_models_, X_test, y_test)
+        evaluator.evaluate_to_html(self.training_summary_)
 
         # Models_dir with time signature
         # get current path
@@ -127,10 +130,10 @@ class Mamut:
         for model in self.fitted_models_:
             model_name = model.named_steps["model"].__class__.__name__
             model_path = os.path.join(models_dir, f"{model_name}.joblib")
-            joblib.dump(model, model_path)
+            # joblib.dump(model, model_path)
             log.info(f"Saved model {model_name} to {model_path}")
 
-        return best_model
+        return self.best_model_
 
     def create_ensemble(
         self, voting: Literal["soft", "hard"] = "soft"
@@ -145,7 +148,7 @@ class Mamut:
             estimators=[
                 (
                     model.named_steps["model"].__class__.__name__,
-                    model.named_steps["model"],
+                    clone(model.named_steps["model"]),
                 )
                 for model in self.fitted_models_
             ],
@@ -153,9 +156,14 @@ class Mamut:
         )
 
         ensemble.fit(self.X_train, self.y_train)
-        self.ensemble = ensemble
-        log.info(f"Created ensemble with all models and voting='{voting}'")
+        y_pred = ensemble.predict(self.X_test)
+        score = self.score_metric(self.y_test, y_pred)
 
+        self.ensemble_ = ensemble
+        log.info(f"Created ensemble with all models and voting='{voting}'. "
+                 f"Ensemble score on test set: {score:.4f} {self.score_metric.__name__}")
+
+        # TODO: Return ensemble as a Pipeline with preprocessor
         return ensemble
 
     def create_greedy_ensemble(
@@ -168,15 +176,16 @@ class Mamut:
             )
 
         # Initialize the ensemble with the best model
-        ensemble_models = [self.best_model_]
+        ensemble_models = [self.best_model_.named_steps["model"]]
         ensemble_scores = [self.best_score_]
+
 
         for _ in range(n_models - 1):
             best_score = 0
             best_model = None
 
             for model in self.fitted_models_:
-                candidate_ensemble = ensemble_models + [model]
+                candidate_ensemble = ensemble_models + [model.named_steps["model"]]
                 candidate_voting_clf = VotingClassifier(
                     estimators=[
                         (f"model_{i}", clone(m))
@@ -191,23 +200,24 @@ class Mamut:
 
                 if score > best_score:
                     best_score = score
-                    best_model = model
+                    best_model = model.named_steps["model"]
 
             ensemble_models.append(best_model)
             ensemble_scores.append(best_score)
 
-        self.ensemble = VotingClassifier(
+        self.ensemble_ = VotingClassifier(
             estimators=[
                 (f"model_{i}", clone(m)) for i, m in enumerate(ensemble_models)
             ],
             voting=voting,
         )
-        self.ensemble_models = ensemble_models
+        self.ensemble_models_ = ensemble_models
 
-        self.ensemble.fit(self.X_train, self.y_train)
+        self.ensemble_.fit(self.X_train, self.y_train)
         log.info(
             f"Created greedy ensemble with voting='{voting}' "
-            f"and models: {[m.__class__.__name__ for m in ensemble_models]}"
+            f"and {n_models} models: {[m.__class__.__name__ for m in ensemble_models]}"
         )
+        # TODO: Return ensemble as a Pipeline with preprocessor
+        return self.ensemble_
 
-        return self.ensemble

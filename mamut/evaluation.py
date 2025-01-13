@@ -1,3 +1,5 @@
+import os
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -118,3 +120,15 @@ class ModelEvaluator:
         plt.tight_layout()
         plt.show()
         return
+
+    def evaluate_to_html(self, training_summary):
+        # Check if the training_summary is a DataFrame and not empty!:
+        if training_summary is None or not isinstance(training_summary, pd.DataFrame) or training_summary.empty:
+            raise ValueError("Can't produce a HTML report because training_summary should be a DataFrame and not empty.")
+
+        # Save to training_summary table to HTML file:
+        report_dir = os.getcwd() + "/mamut_report"
+        os.makedirs(report_dir, exist_ok=True)
+        training_summary.to_html(report_dir + "/training_summary.html")
+
+        return training_summary.to_html()

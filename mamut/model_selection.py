@@ -23,7 +23,7 @@ from sklearn.naive_bayes import GaussianNB  # noqa
 from sklearn.neighbors import KNeighborsClassifier  # noqa
 from sklearn.neural_network import MLPClassifier  # noqa
 from sklearn.svm import SVC  # noqa
-from xgboost import XGBClassifier  # noqa
+# from xgboost import XGBClassifier  # noqa
 
 from mamut.utils import adjust_search_spaces, model_param_dict, sample_parameter
 
@@ -124,7 +124,7 @@ class ModelSelector:
         score_for_best_model = 0
         params_for_best_model = None
         fitted_models = {}
-        training_report = pd.DataFrame()
+        training_summary = pd.DataFrame()
         scores_on_test = {}
 
         for model in self.models:
@@ -133,6 +133,15 @@ class ModelSelector:
             print(
                 f"Best parameters: {params}, score: {score:.4f} {self.score_metric.__name__}\n"
             )
+
+            # TODO: Only for DEBUG
+            if isinstance(model, LogisticRegression):
+                print("MESSAGE ONLY FOR DEBUG: LR on test:")
+                m = LogisticRegression()
+                m.fit(self.X_train, self.y_train)
+                print(self._score_model_with_metrics(m))
+                print()
+
 
             # Reinitialize the model with the best parameters
             model.set_params(**params)
@@ -151,9 +160,9 @@ class ModelSelector:
             # Save the training report
             scores_on_test = self._score_model_with_metrics(model)
 
-            training_report = pd.concat(
+            training_summary = pd.concat(
                 [
-                    training_report,
+                    training_summary,
                     pd.DataFrame(
                         [
                             {
@@ -179,7 +188,7 @@ class ModelSelector:
             params_for_best_model,
             score_for_best_model,
             fitted_models,
-            training_report,
+            training_summary,
         )
 
     def _score_model_with_metrics(self, fitted_model):
