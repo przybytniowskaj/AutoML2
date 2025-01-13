@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 
-from .evaluation import ModelEvaluator
+from .evaluation import ModelEvaluator  # noqa
 from .model_selection import ModelSelector
 from .preprocessing import DataPreprocessor
 from .utils import metric_dict
@@ -112,8 +112,8 @@ class Mamut:
         log.info(f"Best model: {best_model.__class__.__name__}")
 
         # TODO: Najprawodopodobniej evaluator nie musi zwracać DF, bo to jest w training_report
-        evaluator = ModelEvaluator(fitted_models, X_test, y_test)
-        evaluator.plot_results()
+        # evaluator = ModelEvaluator(fitted_models, X_test, y_test)
+        # evaluator.plot_results()
 
         # Models_dir with time signature
         # get current path
