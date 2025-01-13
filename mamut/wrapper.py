@@ -11,9 +11,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 
+from mamut.preprocessing.preprocessing import Preprocessor
+
 from .evaluation import ModelEvaluator  # noqa
 from .model_selection import ModelSelector
-from .preprocessing import DataPreprocessor
 from .utils import metric_dict
 
 log = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ class Mamut:
     def __init__(
         self,
         preprocess: bool = True,
+        imb_threshold: float = 0.10,
         exclude_models: Optional[List[str]] = None,
         score_metric: Literal[
             "accuracy",
@@ -40,15 +42,14 @@ class Mamut:
         **preprocessor_kwargs,
     ):
         self.preprocess = preprocess
+        self.imb_threshold = imb_threshold
         self.exclude_models = exclude_models
         self.score_metric = metric_dict[score_metric]
         self.optimization_method = optimization_method
         self.n_iterations = n_iterations
         self.random_state = random_state
 
-        self.preprocessor = (
-            DataPreprocessor(**preprocessor_kwargs) if preprocess else None
-        )
+        self.preprocessor = Preprocessor(**preprocessor_kwargs) if preprocess else None
 
         self.le = LabelEncoder()
 
@@ -67,9 +68,12 @@ class Mamut:
         self.results_df_ = None
         self.greedy_vc_ = None
         self.vc_ = None
+        self.imbalanced_ = None
 
     def fit(self, X: pd.DataFrame, y: pd.DataFrame):
         Mamut._check_categorical(y)
+        if y.value_counts(normalize=True).min() < self.imb_threshold:
+            self.imbalanced_ = True
 
         y = self.le.fit_transform(y)
 
@@ -78,8 +82,8 @@ class Mamut:
         )
 
         if self.preprocess:
-            X_train = self.preprocessor.fit_transform(X_train, y_train)
-            X_test = self.preprocessor.transform(X_test, y_test)
+            X_train, y_train = self.preprocessor.fit_transform(X_train, y_train)
+            X_test = self.preprocessor.transform(X_test)
 
         self.X_train = X_train
         self.X_test = X_test
@@ -112,6 +116,8 @@ class Mamut:
             for model in fitted_models
         ]  # TODO: Check compliance with ensembles !
         self.best_score_ = score_for_best_model
+
+        # TODO: This works???
         self.best_model_ = Pipeline(
             [("preprocessor", self.preprocessor), ("model", best_model)]
         )

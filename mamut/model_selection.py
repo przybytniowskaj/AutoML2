@@ -201,6 +201,7 @@ class ModelSelector:
             "recall_score": recall_score(self.y_test, y_pred, average="weighted"),
             "f1_score": f1_score(self.y_test, y_pred, average="weighted"),
             "jaccard_score": jaccard_score(self.y_test, y_pred, average="weighted"),
+            # TODO: Add ROC handling
             # "roc_auc_score": roc_auc_score(
             #     self.y_test, y_pred, multi_class="ovr"
             # ),  # TODO: Will not work for multi-class
