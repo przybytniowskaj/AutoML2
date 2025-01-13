@@ -41,6 +41,7 @@ class ModelEvaluator:
             )
 
         self.results_df = pd.DataFrame(results)
+        # TODO: Najprawodopodobniej evaluator nie musi zwracać DF, bo to jest w training_report
         return self.results_df
 
     def plot_results(self):
