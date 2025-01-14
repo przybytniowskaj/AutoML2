@@ -1,5 +1,6 @@
 import time
 import warnings
+from copy import copy
 from typing import Callable, List, Literal, Optional
 
 import numpy as np
@@ -9,14 +10,13 @@ from optuna.samplers import RandomSampler, TPESampler
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis  # noqa
 from sklearn.ensemble import RandomForestClassifier  # noqa
 from sklearn.linear_model import LogisticRegression  # noqa
-from sklearn.metrics import (
+from sklearn.metrics import (  # roc_auc_score,
     accuracy_score,
     balanced_accuracy_score,
     f1_score,
     jaccard_score,
     precision_score,
     recall_score,
-    roc_auc_score,
 )
 from sklearn.model_selection import StratifiedKFold
 from sklearn.naive_bayes import GaussianNB  # noqa
@@ -38,11 +38,11 @@ class ModelSelector:
         y_train,
         X_test,
         y_test,
+        score_metric: Callable,
         exclude_models: Optional[List[str]] = None,
         optimization_method: Literal["random_search", "bayes"] = "bayes",
         n_iterations: int = 50,
         random_state: Optional[int] = 42,
-        score_metric: Callable = roc_auc_score,
     ):
 
         self.X_train = X_train
@@ -64,7 +64,13 @@ class ModelSelector:
                 if model not in exclude_models
             ]
         )
-        self.score_metric = score_metric
+        self.n_classes_ = len(np.unique(y_train))
+        self.binary = True if self.n_classes_ == 2 else False
+        self.score_metric_name = copy(score_metric.__name__)
+        self.score_metric = lambda y_true, y_pred: score_metric(
+            y_true.reshape(-1, 1), y_pred.reshape(-1, 1), average="weighted"
+        )
+
         self.optuna_sampler = (
             TPESampler(seed=random_state)
             if optimization_method == "bayes"
@@ -72,8 +78,6 @@ class ModelSelector:
         )
         self.n_iterations = n_iterations
         self.SKF_ = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
-
-        # TODO: Jeśli jest multi-class, to dostosowanie LR i innych
 
     def objective(self, trial, model):
         if model.__class__.__name__ in model_param_dict:
@@ -177,10 +181,10 @@ class ModelSelector:
             )
 
         print(
-            f"Found best model: {best_model.__class__.__name__} with parameters {params_for_best_model} "
-            f"and score {score_for_best_model:.4f}"
-            f" {self.score_metric.__name__}. To access your best model use: get_best_model() function.\n\n"
-            f"To create a powerful ensemble of models use: create_ensemble() function."
+            f"Found best model: {best_model.__class__.__name__} with parameters {params_for_best_model} \n"
+            f"and score {score_for_best_model:.4f} {self.score_metric.__name__}. \n"
+            f"To access your best model use: get_best_model() function. \n"
+            f"To create a powerful ensemble of models use: create_ensemble() function. \n"
         )  # TODO: Change instructions if needed
 
         return (
@@ -206,14 +210,15 @@ class ModelSelector:
             "recall_score": recall_score(self.y_test, y_pred, average="weighted"),
             "f1_score": f1_score(self.y_test, y_pred, average="weighted"),
             "jaccard_score": jaccard_score(self.y_test, y_pred, average="weighted"),
-            "roc_auc_score": roc_auc_score(
-                self.y_test, y_pred, multi_class="ovr"
-            ),  # TODO: Will not work for multi-class
+            # TODO: Add ROC handling
+            # "roc_auc_score": roc_auc_score(
+            #     self.y_test, y_pred, multi_class="ovr"
+            # ),  # TODO: Will not work for multi-class
         }
 
         # Change the order of columns so that the self.score_metric is first
         results = {
-            self.score_metric.__name__: results.pop(self.score_metric.__name__),
+            self.score_metric_name: results.pop(self.score_metric_name),
             **results,
         }
         return results
