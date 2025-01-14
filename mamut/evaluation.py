@@ -132,8 +132,14 @@ class ModelEvaluator:
     def evaluate_to_html(self, training_summary : pd.DataFrame,
                          score_metric : Callable):
         # Check if the training_summary is a DataFrame and not empty!:
-        if training_summary is None or not isinstance(training_summary, pd.DataFrame) or training_summary.empty:
-            raise ValueError("Can't produce a HTML report because training_summary should be a DataFrame and not empty.")
+        if (
+            training_summary is None
+            or not isinstance(training_summary, pd.DataFrame)  # noqa
+            or training_summary.empty  # noqa
+        ):
+            raise ValueError(
+                "Can't produce a HTML report because training_summary should be a DataFrame and not empty."
+            )
 
         # Preprocess the training_summary DataFrame:
         training_summary = training_summary.rename(columns={

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
 
-from mamut.preprocessing.handlers import (
+from mamut.preprocessing.handlers import (  # handle_skewed,
     handle_categorical,
     handle_extraction,
     handle_missing_categorical,
@@ -12,7 +12,6 @@ from mamut.preprocessing.handlers import (
     handle_outliers,
     handle_scaling,
     handle_selection,
-    handle_skewed,
 )
 
 
@@ -25,6 +24,7 @@ class Preprocessor:
             "iterative", "knn", "mean", "median", "constant"
         ] = "knn",
         cat_imputation: Literal["most_frequent", "constant"] = "constant",
+        scaling: Literal["standard", "robust"] = "standard",
         feature_selection: bool = False,
         pca: bool = False,
         random_state: Optional[int] = 42,
@@ -36,14 +36,10 @@ class Preprocessor:
         self.feature_selection = feature_selection
         self.pca = pca
         self.random_state = random_state
+        self.scaling = scaling
 
-        self._num_steps = None
-        self._cat_steps = None
-        self._steps = None
-        self.inf_pipe_ = None
         self.imbalanced_ = None
         self.missing_ = None
-
         self.imbalanced_trans_ = None
         self.outlier_trans_ = None
         self.missing_num_trans_ = None
@@ -73,6 +69,7 @@ class Preprocessor:
                 exclude="number"
             ).columns.tolist()
 
+        # TODO: EXPERIMENT AND TEST DIFFERENT PREPROCESSING CONFIGURATIONS
         self.has_numeric_ = len(self.numeric_features) > 0
         self.has_categorical_ = len(self.categorical_features) > 0
 
@@ -98,10 +95,11 @@ class Preprocessor:
 
         X, self.cat_trans_ = handle_categorical(X, self.categorical_features)
 
-        X, self.skew_trans_, self.skewed_feature_names_ = handle_skewed(
-            X, self.numeric_features
-        )
-        X, self.scaler_ = handle_scaling(X, self.numeric_features)
+        # TODO: zbadac wlyw powertransformera, dostosowac skew treshold
+        # X, self.skew_trans_, self.skewed_feature_names_ = handle_skewed(
+        #     X, self.numeric_features
+        # )
+        X, self.scaler_ = handle_scaling(X, self.numeric_features, self.scaling)
 
         if self.feature_selection:
             X, self.sel_trans_, self.selected_features_ = handle_selection(
@@ -117,7 +115,7 @@ class Preprocessor:
         # if self.imbalanced_:
         #     X, y, self.imbalanced_trans_ = handle_imbalanced(X, y)
 
-        self.skewed_ = len(self.skewed_feature_names_) > 0
+        # self.skewed_ = len(self.skewed_feature_names_) > 0
         self.fitted = True
 
         if isinstance(X, pd.DataFrame):
@@ -131,6 +129,8 @@ class Preprocessor:
     def transform(self, X: pd.DataFrame) -> np.ndarray:
         if not self.fitted:
             raise RuntimeError("Preprocessor has not been fitted.")
+        if not isinstance(X, pd.DataFrame):
+            raise ValueError("Input data must be a pandas DataFrame.")
 
         if self.missing_num_trans_:
             X[self.numeric_features] = self.missing_num_trans_.transform(
@@ -150,10 +150,10 @@ class Preprocessor:
             )
             X = X.drop(columns=self.categorical_features).join(encoded_features_df)
 
-        if self.skewed_:
-            X[self.skewed_feature_names_] = self.skew_trans_.transform(
-                X[self.skewed_feature_names_]
-            )
+        # if self.skewed_:
+        #     X[self.skewed_feature_names_] = self.skew_trans_.transform(
+        #         X[self.skewed_feature_names_]
+        #     )
 
         X[self.numeric_features] = self.scaler_.transform(X[self.numeric_features])
 

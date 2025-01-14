@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal
 
 import numpy as np
 import pandas as pd
@@ -11,16 +11,10 @@ from sklearn.ensemble import ExtraTreesClassifier, IsolationForest
 # from imblearn.combine import SMOTETomek
 from sklearn.experimental import enable_iterative_imputer  # noqa
 from sklearn.feature_selection import SelectFromModel
-from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
-from sklearn.preprocessing import OneHotEncoder, PowerTransformer, RobustScaler
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder, PowerTransformer
 
-imputer_mapping = {
-    "iterative": IterativeImputer,
-    "knn": KNNImputer,
-    "mean": lambda: SimpleImputer(strategy="mean"),
-    "median": lambda: SimpleImputer(strategy="median"),
-    "constant": lambda: SimpleImputer(strategy="constant"),
-}
+import mamut.preprocessing.settings as settings
 
 
 def handle_outliers(X, y, feature_names, contamination=0.01, random_state=42):
@@ -98,7 +92,7 @@ def handle_skewed(X: pd.DataFrame, feature_names: List[str]):
     pt = PowerTransformer(method="yeo-johnson", standardize=False)
     for feature in feature_names:
         feature_skewness = skew(X[feature])
-        if abs(feature_skewness) > 0.5:
+        if abs(feature_skewness) > 2:
             skewed_feature_names.append(feature)
 
     if len(skewed_feature_names) > 0:
@@ -108,8 +102,13 @@ def handle_skewed(X: pd.DataFrame, feature_names: List[str]):
 
 
 def handle_missing_numeric(X, feature_names, strategy):
+    if strategy not in settings.imputer_mapping.keys():
+        raise ValueError(
+            f"Invalid imputation strategy, choose from {settings.imputer_mapping.keys()}."
+        )
+
     X = X.copy()
-    imputer = imputer_mapping[strategy]()
+    imputer = settings.imputer_mapping[strategy]()
     imputer.fit(X[feature_names])
     X[feature_names] = imputer.transform(X[feature_names])
 
@@ -140,9 +139,16 @@ def handle_categorical(X, feature_names):
     return X, encoder
 
 
-def handle_scaling(X, feature_names):
+def handle_scaling(
+    X: pd.DataFrame, feature_names: List[str], strategy: Literal["standard", "robust"]
+):
+    if strategy not in ["standard", "robust"]:
+        raise ValueError(
+            f"Invalid scaling strategy, choose from {settings.scaler_mapping.keys()}."
+        )
+
     X = X.copy()
-    scaler = RobustScaler()
+    scaler = settings.scaler_mapping[strategy]()
     scaler.fit(X[feature_names])
     X[feature_names] = scaler.transform(X[feature_names])
 
