@@ -4,48 +4,97 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Model Evaluation Report</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f4f4f9;
-        }
-        h1, h2 {
-            color: #333;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-            font-size: 1em;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-        }
-        table thead tr {
-            background-color: #009879;
-            color: #ffffff;
-            text-align: left;
-        }
-        table th, table td {
-            padding: 12px 15px;
-        }
-        table tbody tr {
-            border-bottom: 1px solid #dddddd;
-        }
-        table tbody tr:nth-of-type(even) {
-            background-color: #f3f3f3;
-        }
-        table tbody tr:last-of-type {
-            border-bottom: 2px solid #009879;
-        }
-    </style>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #e0f7fa; /* skyblue */
+    }
+    h1, h2 {
+        color: #003366; /* navyblue */
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 1em;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+    }
+    table thead tr {
+        background-color: #007bb5; /* skyblue */
+        color: #ffffff;
+        text-align: left;
+    }
+    table th, table td {
+        padding: 12px 15px;
+    }
+    table th {
+        text-align: center;
+    }
+    table tbody tr {
+        border-bottom: 1px solid #dddddd;
+    }
+    table tbody tr:nth-of-type(even) {
+        background-color: #e0f7fa; /* skyblue */
+    }
+    table tbody tr:last-of-type {
+        border-bottom: 2px solid #007bb5; /* skyblue */
+    }
+    .header {
+        //background-color: #ffffff; /* skyblue */
+        color: #ffffff;
+        padding: 0px 0;
+        text-align: center;
+    }
+
+    .heading {
+        background-color: #75c4e8; /* skyblue */
+        color: #171616;
+        padding: 10px 0;
+        text-align: center;
+        border-radius: 10px;
+    }
+
+    .heading2 {
+        text-decoration: underline;
+        text-align: center;
+    }
+
+    .section {
+        text-align: center;
+        padding: 20px;
+        margin: 20px 0;
+        background-color: #f0f8ff; /* aliceblue */
+        border: 2px solid #007bb5;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+</style>
 </head>
 <body>
-    <h1>Model Evaluation Report</h1>
-    <p>Report generated on {{ time_signature }}</p>
-    <h2>Training Summary</h2>
-    {{ training_summary | safe }}
-    <h2>ROC AUC Curve</h2>
-    <img src="roc_auc_curve.png" alt="ROC AUC Curve">
+    <div class="header">
+        <img src="data:image/png;base64, {{ image_header }}" alt="Mamut Logo" style="width: 30%;">
+    </div>
+
+    <div class="heading">
+        <h1>Model Evaluation Report</h1>
+        <p>Report generated on {{ time_signature }}</p>
+    </div>
+
+    <div class="heading2">
+        <h2>Training Summary</h2>
+    </div>
+    <div class="section">
+        {{ training_summary | safe }}
+    </div>
+
+    <div class="heading">
+        <h2>ROC AUC Curve</h2>
+    </div>
+    <div class="section">
+        <img src="plots/roc_auc_curve.png" alt="ROC AUC Curve">
+    </div>
+
 </body>
 </html>

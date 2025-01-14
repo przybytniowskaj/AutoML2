@@ -25,7 +25,6 @@ if __name__ == "__main__":
     mamut.fit(X, y)
     print("Fitted")
 
-
     mamut.evaluate()
 
     best_model = mamut.best_model_

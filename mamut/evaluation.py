@@ -1,6 +1,7 @@
 import os
 import time
 from typing import Callable
+import base64
 
 from jinja2 import Environment, FileSystemLoader
 import matplotlib.pyplot as plt
@@ -18,9 +19,11 @@ from sklearn.metrics import (
     roc_curve,
 )
 
+def _get_base64_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
 
 class ModelEvaluator:
-
 
     report_template_path : str = os.path.join(os.path.dirname(__file__), "utils")
 
@@ -28,6 +31,13 @@ class ModelEvaluator:
         self.models = models
         self.X_test = X_test
         self.y_test = y_test
+
+        self.report_output_path = os.path.join(os.getcwd(), "mamut_report")
+        self.plot_output_path = os.path.join(self.report_output_path, "plots")
+
+        # Create the report directory it doesn't exist:
+        os.makedirs(self.report_output_path, exist_ok=True)
+        os.makedirs(self.plot_output_path, exist_ok=True)
 
     def evaluate(self):
         results = []
@@ -56,12 +66,12 @@ class ModelEvaluator:
     def plot_results(self):
         if not hasattr(self, "results_df"):
             raise ValueError("You need to run evaluate() before plotting results.")
-        self.plot_roc_auc_curve()
+        self._plot_roc_auc_curve()
         self.plot_all_confusion_matrices()
 
         return
 
-    def plot_roc_auc_curve(self):
+    def _plot_roc_auc_curve(self, show: bool = False, save: bool = True) -> None:
         plt.figure(figsize=(10, 6))
 
         for model in self.models:
@@ -71,7 +81,14 @@ class ModelEvaluator:
             plt.plot(fpr, tpr, label=f"{model.__class__.__name__} ROC ({auc:.2f})")
 
         plt.legend()
-        plt.show()
+        plt.title("ROC AUC Curve")
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        if show:
+            plt.show()
+        if save:
+            plt.savefig(os.path.join(self.plot_output_path, "roc_auc_curve.png"), format="png", bbox_inches="tight")
+
         return
 
         # y_test_bin = label_binarize(self.y_test, classes=list(set(self.y_test)))
@@ -101,7 +118,7 @@ class ModelEvaluator:
         # plt.title('Receiver Operating Characteristic (ROC) Curve')
         # plt.legend(loc="lower right")
         # plt.show()
-        return
+
 
     def plot_all_confusion_matrices(self):
         if not hasattr(self, "results_df"):
@@ -159,13 +176,13 @@ class ModelEvaluator:
         # Transform summary to HTML:
         training_summary_html = training_summary.to_html()
 
-        # Create the report directory it doesn't exist:
-        report_dir = os.path.join(os.getcwd(), "mamut_report")
-        os.makedirs(report_dir, exist_ok=True)
+        # Transform the header image to base64:
+        image_header_path = os.path.join(self.report_template_path, "mamut_header.png")
+        base64_image = _get_base64_image(image_header_path)
 
-        # Save roc_auc_curve as .png file:
-        self.plot_roc_auc_curve()
-        plt.savefig(os.path.join(report_dir, "roc_auc_curve.png"))
+        # Create and save roc_auc_curve as .png file:
+        self._plot_roc_auc_curve()
+
 
         # Load the Jinja2 template placed in report_template_path:
         env = Environment(loader=FileSystemLoader(self.report_template_path))
@@ -173,12 +190,9 @@ class ModelEvaluator:
 
         # Render the template with the training_summary and save the HTML file
         time_signature = str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
-        html_content = template.render(time_signature=time_signature, training_summary=training_summary_html)
+        html_content = template.render(time_signature=time_signature, training_summary=training_summary_html, image_header=base64_image)
 
-        with open(os.path.join(report_dir, "report.html"), "w") as f:
+        with open(os.path.join(self.report_output_path, "report.html"), "w") as f:
             f.write(html_content)
 
         return html_content
-
-        # training_summary.to_html(os.path.join(report_dir,  "training_summary.html"))
-        # return training_summary.to_html()

@@ -10,11 +10,10 @@ from sklearn.ensemble import VotingClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-# from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
-from xgboost import XGBClassifier
+# from xgboost import XGBClassifier
 
 from mamut.preprocessing.preprocessing import Preprocessor
 
