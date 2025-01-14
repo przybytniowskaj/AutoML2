@@ -5,14 +5,12 @@ from typing import List, Literal, Optional, Union
 
 import joblib
 import pandas as pd
-from sklearn.base import clone
+from sklearn.base import BaseEstimator, clone
 from sklearn.ensemble import VotingClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.base import BaseEstimator
-from xgboost import XGBClassifier
 from sklearn.preprocessing import LabelEncoder
+from xgboost import XGBClassifier
 
 from mamut.preprocessing.preprocessing import Preprocessor
 
@@ -63,17 +61,17 @@ class Mamut:
         self.y_test = None
 
         self.raw_models_: Optional[List[Union[BaseEstimator, XGBClassifier]]] = None
-        self.fitted_models_ : Optional[List[Pipeline]] = None
-        self.best_model_ : Optional[Pipeline] = None
+        self.fitted_models_: Optional[List[Pipeline]] = None
+        self.best_model_: Optional[Pipeline] = None
         self.best_score_ = None
         self.training_summary_ = None
 
-        self.ensemble_ : Optional[Pipeline] = None
-        self.greedy_ensemble_ : Optional[Pipeline]= None
+        self.ensemble_: Optional[Pipeline] = None
+        self.greedy_ensemble_: Optional[Pipeline] = None
         self.ensemble_models_ = None
         self.imbalanced_ = None
 
-    def fit(self, X: pd.DataFrame, y: pd.DataFrame):
+    def fit(self, X: pd.DataFrame, y: pd.Series):
         Mamut._check_categorical(y)
         if y.value_counts(normalize=True).min() < self.imb_threshold:
             self.imbalanced_ = True
@@ -121,7 +119,9 @@ class Mamut:
 
         self.best_score_ = score_for_best_model
         # TODO: This works???
-        self.best_model_ = Pipeline([("preprocessor", self.preprocessor), ("model", best_model)])
+        self.best_model_ = Pipeline(
+            [("preprocessor", self.preprocessor), ("model", best_model)]
+        )
         self.training_summary_ = training_summary
 
         log.info(f"Best model: {best_model.__class__.__name__}")
@@ -142,7 +142,6 @@ class Mamut:
 
         return self.best_model_
 
-
     def predict(self, X: pd.DataFrame):
         return self._predict(X)
 
@@ -151,12 +150,11 @@ class Mamut:
 
     def evaluate(self) -> None:
         self._check_fitted()
-        # TODO: Najprawodopodobniej evaluator nie musi zwracać DF, bo to jest w training_report. Powinno to być przeniesi
+        # TODO: Najprawodopodobniej evaluator nie musi zwracać DF, bo to jest w training_report. Powinno to być przeniesi # noqa
         evaluator = ModelEvaluator(self.fitted_models_, self.X_test, self.y_test)
         # _ = evaluator.evaluate()
         evaluator.evaluate_to_html(self.training_summary_)
         evaluator.plot_results()
-
 
     def save_best_model(self, path: str) -> None:
         # TODO: Think if necessary (all models are saved in the fitted_models dir)
@@ -166,7 +164,6 @@ class Mamut:
         )
         joblib.dump(self.best_model_, save_path)
         log.info(f"Saved best model to {save_path}")
-
 
     def create_ensemble(self, voting: Literal["soft", "hard"] = "soft") -> Pipeline:
         self._check_fitted()
@@ -179,18 +176,22 @@ class Mamut:
                 )
                 for model in self.fitted_models_
             ],
-            voting=voting)
+            voting=voting,
+        )
 
         ensemble.fit(self.X_train, self.y_train)
         y_pred = ensemble.predict(self.X_test)
         score = self.score_metric(self.y_test, y_pred)
 
-        self.ensemble_ = Pipeline([("preprocessor", self.preprocessor), ("model", ensemble)])
-        log.info(f"Created ensemble with all models and voting='{voting}'. "
-                 f"Ensemble score on test set: {score:.4f} {self.score_metric.__name__}")
+        self.ensemble_ = Pipeline(
+            [("preprocessor", self.preprocessor), ("model", ensemble)]
+        )
+        log.info(
+            f"Created ensemble with all models and voting='{voting}'. "
+            f"Ensemble score on test set: {score:.4f} {self.score_metric.__name__}"
+        )
 
         return self.ensemble_
-
 
     def create_greedy_ensemble(
         self, n_models: int = 6, voting: Literal["soft", "hard"] = "soft"
@@ -237,7 +238,9 @@ class Mamut:
         score = self.score_metric(self.y_test, y_pred)
 
         self.ensemble_models_ = ensemble_models
-        self.greedy_ensemble_ = Pipeline([("preprocessor", self.preprocessor), ("model", ensemble)])
+        self.greedy_ensemble_ = Pipeline(
+            [("preprocessor", self.preprocessor), ("model", ensemble)]
+        )
 
         log.info(
             f"Created greedy ensemble with voting='{voting}' \n"
@@ -246,7 +249,6 @@ class Mamut:
         )
 
         return self.greedy_ensemble_
-
 
     def _predict(self, X: pd.DataFrame, proba: bool = False):
         self._check_fitted()

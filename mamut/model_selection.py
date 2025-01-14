@@ -23,9 +23,11 @@ from sklearn.naive_bayes import GaussianNB  # noqa
 from sklearn.neighbors import KNeighborsClassifier  # noqa
 from sklearn.neural_network import MLPClassifier  # noqa
 from sklearn.svm import SVC  # noqa
-# from xgboost import XGBClassifier  # noqa
 
 from mamut.utils import adjust_search_spaces, model_param_dict, sample_parameter
+
+# from xgboost import XGBClassifier  # noqa
+
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 warnings.filterwarnings("ignore")
@@ -145,7 +147,6 @@ class ModelSelector:
                 m.fit(self.X_train, self.y_train)
                 print(self._score_model_with_metrics(m))
                 print()
-
 
             # Reinitialize the model with the best parameters
             model.set_params(**params)

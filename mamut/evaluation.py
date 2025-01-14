@@ -124,8 +124,14 @@ class ModelEvaluator:
 
     def evaluate_to_html(self, training_summary):
         # Check if the training_summary is a DataFrame and not empty!:
-        if training_summary is None or not isinstance(training_summary, pd.DataFrame) or training_summary.empty:
-            raise ValueError("Can't produce a HTML report because training_summary should be a DataFrame and not empty.")
+        if (
+            training_summary is None
+            or not isinstance(training_summary, pd.DataFrame)  # noqa
+            or training_summary.empty  # noqa
+        ):
+            raise ValueError(
+                "Can't produce a HTML report because training_summary should be a DataFrame and not empty."
+            )
 
         # Save to training_summary table to HTML file:
         report_dir = os.getcwd() + "/mamut_report"
