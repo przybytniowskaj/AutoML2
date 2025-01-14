@@ -1,5 +1,8 @@
 import os
+import time
+from typing import Callable
 
+from jinja2 import Environment, FileSystemLoader
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -17,6 +20,10 @@ from sklearn.metrics import (
 
 
 class ModelEvaluator:
+
+
+    report_template_path : str = os.path.join(os.path.dirname(__file__), "utils")
+
     def __init__(self, models, X_test, y_test):
         self.models = models
         self.X_test = X_test
@@ -122,14 +129,50 @@ class ModelEvaluator:
         plt.show()
         return
 
-    def evaluate_to_html(self, training_summary):
+    def evaluate_to_html(self, training_summary : pd.DataFrame,
+                         score_metric : Callable):
         # Check if the training_summary is a DataFrame and not empty!:
         if training_summary is None or not isinstance(training_summary, pd.DataFrame) or training_summary.empty:
             raise ValueError("Can't produce a HTML report because training_summary should be a DataFrame and not empty.")
 
-        # Save to training_summary table to HTML file:
-        report_dir = os.getcwd() + "/mamut_report"
-        os.makedirs(report_dir, exist_ok=True)
-        training_summary.to_html(report_dir + "/training_summary.html")
+        # Preprocess the training_summary DataFrame:
+        training_summary = training_summary.rename(columns={
+            "model": "Model",
+            "accuracy_score": "Accuracy",
+            "balanced_accuracy_score": "Balanced Accuracy",
+            "precision_score": "Precision",
+            "recall_score": "Recall",
+            "f1_score": "F1 Score",
+            "jaccard_score": "Jaccard Score",
+            "roc_auc_score": "ROC AUC",
+            "duration": "Training Time [s]",
+        })
+        # Sort the training_summary DataFrame by the score_metric column
+        training_summary = training_summary.sort_values(by=training_summary.columns[1], ascending=False)
 
-        return training_summary.to_html()
+        # Transform summary to HTML:
+        training_summary_html = training_summary.to_html()
+
+        # Create the report directory it doesn't exist:
+        report_dir = os.path.join(os.getcwd(), "mamut_report")
+        os.makedirs(report_dir, exist_ok=True)
+
+        # Save roc_auc_curve as .png file:
+        self.plot_roc_auc_curve()
+        plt.savefig(os.path.join(report_dir, "roc_auc_curve.png"))
+
+        # Load the Jinja2 template placed in report_template_path:
+        env = Environment(loader=FileSystemLoader(self.report_template_path))
+        template = env.get_template("report_template.html")
+
+        # Render the template with the training_summary and save the HTML file
+        time_signature = str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+        html_content = template.render(time_signature=time_signature, training_summary=training_summary_html)
+
+        with open(os.path.join(report_dir, "report.html"), "w") as f:
+            f.write(html_content)
+
+        return html_content
+
+        # training_summary.to_html(os.path.join(report_dir,  "training_summary.html"))
+        # return training_summary.to_html()

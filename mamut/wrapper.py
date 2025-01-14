@@ -1,27 +1,27 @@
 import logging
 import os
 import time
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional
 
 import joblib
 import pandas as pd
 from sklearn.base import clone
 from sklearn.ensemble import VotingClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.base import BaseEstimator
-from xgboost import XGBClassifier
+# from xgboost import XGBClassifier
 from sklearn.preprocessing import LabelEncoder
 
 from mamut.preprocessing.preprocessing import Preprocessor
 
 from .evaluation import ModelEvaluator  # noqa
 from .model_selection import ModelSelector
-from .utils import metric_dict
+from mamut.utils.utils import metric_dict
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
 
 
 class Mamut:
@@ -62,7 +62,8 @@ class Mamut:
         self.y_train = None
         self.y_test = None
 
-        self.raw_models_: Optional[List[Union[BaseEstimator, XGBClassifier]]] = None
+        # self.raw_models_: Optional[List[Union[BaseEstimator, XGBClassifier]]] = None
+        self.raw_models_ = None
         self.fitted_models_ : Optional[List[Pipeline]] = None
         self.best_model_ : Optional[Pipeline] = None
         self.best_score_ = None
@@ -151,11 +152,15 @@ class Mamut:
 
     def evaluate(self) -> None:
         self._check_fitted()
-        # TODO: Najprawodopodobniej evaluator nie musi zwracać DF, bo to jest w training_report. Powinno to być przeniesi
-        evaluator = ModelEvaluator(self.fitted_models_, self.X_test, self.y_test)
+        # TODO: Najprawodopodobniej evaluator nie musi zwracać DF, bo to jest w training_report.
+
+        m = KNeighborsClassifier(n_neighbors=5)
+        m.fit(self.X_train, self.y_train)
+        # TODO: CHANGE, only for debug
+        evaluator = ModelEvaluator([m], self.X_test, self.y_test)
         # _ = evaluator.evaluate()
-        evaluator.evaluate_to_html(self.training_summary_)
-        evaluator.plot_results()
+        evaluator.evaluate_to_html(self.training_summary_, self.score_metric)
+        # evaluator.plot_results()
 
 
     def save_best_model(self, path: str) -> None:

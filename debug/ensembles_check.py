@@ -26,20 +26,21 @@ if __name__ == "__main__":
     mamut.fit(X, y)
     print("Fitted")
 
+    mamut.evaluate()
 
-    ensemble = mamut.create_greedy_ensemble(voting = "soft")
-    print("Ensemble created")
-    print(type(ensemble))
-    print(accuracy_score(mamut.y_test, ensemble.predict(mamut.X_test)))
-    print(ensemble.estimators)
-
-    ensemble_clone = clone(ensemble)
-    print("Cloned")
-
-    print("Fitting ensemble by hand")
-    ensemble_clone.fit(X_train, y_train)
-    y_pred = ensemble_clone.predict(X_test)
-    print("ROC AUC Score: ", roc_auc_score(y_test, y_pred))
+    # ensemble = mamut.create_greedy_ensemble(voting = "soft")
+    # print("Ensemble created")
+    # print(type(ensemble))
+    # print(accuracy_score(mamut.y_test, ensemble.predict(mamut.X_test)))
+    # print(ensemble.named_steps["model"].estimators)
+    #
+    # ensemble_clone = clone(ensemble)
+    # print("Cloned")
+    #
+    # print("Fitting ensemble by hand")
+    # ensemble_clone.fit(X_train, y_train)
+    # y_pred = ensemble_clone.predict(X_test)
+    # print("ROC AUC Score: ", roc_auc_score(y_test, y_pred))
 
 
     # Check X_train and X_test from mamut

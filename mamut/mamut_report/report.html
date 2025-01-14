@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Evaluation Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 1em;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+        }
+        table thead tr {
+            background-color: #009879;
+            color: #ffffff;
+            text-align: left;
+        }
+        table th, table td {
+            padding: 12px 15px;
+        }
+        table tbody tr {
+            border-bottom: 1px solid #dddddd;
+        }
+        table tbody tr:nth-of-type(even) {
+            background-color: #f3f3f3;
+        }
+        table tbody tr:last-of-type {
+            border-bottom: 2px solid #009879;
+        }
+    </style>
+</head>
+<body>
+    <h1>Model Evaluation Report</h1>
+    <p>Report generated on 2025-01-14_18:58:04</p>
+    <h2>Training Summary</h2>
+    <table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Model</th>
+      <th>F1 Score</th>
+      <th>Accuracy</th>
+      <th>Balanced Accuracy</th>
+      <th>Precision</th>
+      <th>Recall</th>
+      <th>Jaccard Score</th>
+      <th>Training Time [s]</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>4</th>
+      <td>KNeighborsClassifier</td>
+      <td>1.000000</td>
+      <td>1.000000</td>
+      <td>1.000000</td>
+      <td>1.000000</td>
+      <td>1.000000</td>
+      <td>1.000000</td>
+      <td>0.375661</td>
+    </tr>
+    <tr>
+      <th>0</th>
+      <td>LogisticRegression</td>
+      <td>0.991205</td>
+      <td>0.991228</td>
+      <td>0.988095</td>
+      <td>0.991348</td>
+      <td>0.991228</td>
+      <td>0.982576</td>
+      <td>0.093681</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>GaussianNB</td>
+      <td>0.973616</td>
+      <td>0.973684</td>
+      <td>0.969246</td>
+      <td>0.973711</td>
+      <td>0.973684</td>
+      <td>0.948692</td>
+      <td>0.016129</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>LinearDiscriminantAnalysis</td>
+      <td>0.964509</td>
+      <td>0.964912</td>
+      <td>0.952381</td>
+      <td>0.966759</td>
+      <td>0.964912</td>
+      <td>0.931671</td>
+      <td>0.167993</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>RandomForestClassifier</td>
+      <td>0.955776</td>
+      <td>0.956140</td>
+      <td>0.945437</td>
+      <td>0.956869</td>
+      <td>0.956140</td>
+      <td>0.915609</td>
+      <td>7.115473</td>
+    </tr>
+  </tbody>
+</table>
+    <h2>ROC AUC Curve</h2>
+    <img src="roc_auc_curve.png" alt="ROC AUC Curve">
+</body>
+</html>
