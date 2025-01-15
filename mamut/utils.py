@@ -47,18 +47,6 @@ svc_params = {
     "probability": ([True], "categorical"),
 }
 
-lgb_params = {
-    "num_leaves": (15, 255, "int"),
-    "learning_rate": (1e-4, 0.4, "log"),
-    "n_estimators": (10, 1000, "int"),
-    "max_depth": (0, 10, "int"),
-    "min_child_samples": (5, 50, "int"),
-    "subsample": (0.4, 1.0, "float"),
-    "colsample_bytree": (0.4, 1.0, "float"),
-    "reg_alpha": (1e-4, 10.0, "log"),
-    "reg_lambda": (1e-4, 10.0, "log"),
-}
-
 mlp_params = {
     "hidden_layer_sizes": (
         [(32,), (64,), (128,), (256,), (32, 16), (32, 32), (64, 32), (64, 64)],
@@ -92,7 +80,7 @@ model_param_dict = {
     "LinearDiscriminantAnalysis": lda_params,
     "RandomForestClassifier": tree_params,
     "SVC": svc_params,
-    # "XGBClassifier": xgb_params,
+    "XGBClassifier": xgb_params,
     "MLPClassifier": mlp_params,
     "GaussianNB": gnb_params,
     "KNeighborsClassifier": knn_params,
