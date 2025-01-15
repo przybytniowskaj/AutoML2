@@ -44,6 +44,7 @@ svc_params = {
     "kernel": (["linear", "poly", "rbf", "sigmoid"], "categorical"),
     "gamma": (1e-4, 1.0, "log"),
     "class_weight": (["balanced"], "categorical"),
+    "probability": ([True], "categorical"),
 }
 
 lgb_params = {
