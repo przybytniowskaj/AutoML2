@@ -107,6 +107,19 @@ metric_dict = {
     "roc_auc": roc_auc_score,
 }
 
+preprocessing_steps = {
+    "IsolationForest": ("Outlier detection", "Detects and removes outliers from the dataset."),
+    "SimpleImputer": ("Imputation", "Fills missing values in the dataset."),
+    "PowerTransformer": ("Transformation", "Applies power transformation to reduce skewness."),
+    "OneHotEncoder": ("Encoding", "Encodes categorical features using one-hot encoding."),
+    "SelectFromModel": ("Feature selection", "Selects features based on importance weights."),
+    "PCA": ("Dimensionality reduction", "Reduces dimensionality of the dataset using Principal Component Analysis."),
+    "ExtraTreesClassifier": ("Feature selection", "Classifier used for feature selection."),
+    "StandardScaler": ("Scaling", "Standardizes features by removing the mean and scaling to unit variance."),
+    "RobustScaler": ("Scaling", "Scales features using statistics that are robust to outliers."),
+    "KNNImputer": ("Imputation", "Fills missing values using k-Nearest Neighbors."),
+    "IterativeImputer": ("Imputation", "Fills missing values using iterative imputation."),
+}
 
 def sample_parameter(trial, param_name, value):
     """Sample a parameter value based on its distribution type."""

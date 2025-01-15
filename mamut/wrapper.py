@@ -55,10 +55,11 @@ class Mamut:
         self.random_state = random_state
 
         self.preprocessor = Preprocessor(**preprocessor_kwargs) if preprocess else None
-
         self.le = LabelEncoder()
-
         self.model_selector = None
+
+        self.X = None
+        self.y = None
         self.X_train = None
         self.X_test = None
         self.y_train = None
@@ -95,6 +96,8 @@ class Mamut:
         self.X_test = X_test
         self.y_train = y_train
         self.y_test = y_test
+        self.X = X
+        self.y = y
 
         self.model_selector = ModelSelector(
             X_train,
@@ -156,13 +159,15 @@ class Mamut:
     def evaluate(self) -> None:
         self._check_fitted()
 
-        # TODO: Najprawodopodobniej evaluator nie musi zwracać DF, bo to jest w training_report.
-
+        # TODO: CHANGE, only for debug
         m = KNeighborsClassifier(n_neighbors=5)
         m.fit(self.X_train, self.y_train)
-        # TODO: CHANGE, only for debug
-        evaluator = ModelEvaluator([m], self.X_test, self.y_test)
-        # _ = evaluator.evaluate()
+        evaluator = ModelEvaluator([m], X_test=self.X_test, y_test=self.y_test,
+                                   X=self.X, y=self.y, optimizer=self.optimization_method,
+                                   metric=self.score_metric.__name__, n_trials=self.n_iterations,
+                                   excluded_models=self.exclude_models
+                                   )
+
         evaluator.evaluate_to_html(self.training_summary_, self.score_metric)
         # evaluator.plot_results()
 
