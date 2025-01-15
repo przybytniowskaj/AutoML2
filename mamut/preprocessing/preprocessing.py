@@ -7,6 +7,7 @@ from sklearn.pipeline import Pipeline
 from mamut.preprocessing.handlers import (  # handle_skewed,
     handle_categorical,
     handle_extraction,
+    handle_imbalanced,
     handle_missing_categorical,
     handle_missing_numeric,
     handle_outliers,
@@ -27,8 +28,11 @@ class Preprocessor:
         scaling: Literal["standard", "robust"] = "standard",
         feature_selection: bool = False,
         pca: bool = False,
+        imbalanced_resampling: bool = True,
+        resampling_strategy: Literal["SMOTE", "undersample", "combine"] = "SMOTE",
         pca_threshold: float = 0.95,
         selection_threshold: float = 0.05,
+        imbalance_threshold: float = 0.10,
         random_state: Optional[int] = 42,
     ) -> None:
         self.numeric_features = numeric_features
@@ -41,6 +45,9 @@ class Preprocessor:
         self.scaling = scaling
         self.pca_threshold = pca_threshold
         self.selection_threshold = selection_threshold
+        self.imbalance_threshold = imbalance_threshold
+        self.imbalanced_resampling = imbalanced_resampling
+        self.resampling_strategy = resampling_strategy
 
         self.imbalanced_ = None
         self.missing_ = None
@@ -62,6 +69,7 @@ class Preprocessor:
         self.missing_categorical_ = None
         self.has_numeric_ = None
         self.has_categorical_ = None
+        self.ohe_feature_names_ = None
 
     def fit_transform(
         self, X: pd.DataFrame, y: pd.Series
@@ -73,13 +81,15 @@ class Preprocessor:
                 exclude="number"
             ).columns.tolist()
 
+        if y.value_counts(normalize=True).min() < self.imbalance_threshold:
+            self.imbalanced_ = True
+
         # TODO: EXPERIMENT AND TEST DIFFERENT PREPROCESSING CONFIGURATIONS
         self.has_numeric_ = len(self.numeric_features) > 0
         self.has_categorical_ = len(self.categorical_features) > 0
 
         if self.has_numeric_:
             if X[self.numeric_features].isnull().sum().sum() > 0:
-                self.missing_ = True
                 self.missing_numeric_ = True
                 X, self.missing_num_trans_ = handle_missing_numeric(
                     X, self.numeric_features, self.num_imputation
@@ -87,23 +97,28 @@ class Preprocessor:
 
         if self.has_categorical_:
             if X[self.categorical_features].isnull().sum().sum() > 0:
-                self.missing_ = True
                 self.missing_categorical_ = True
                 X, self.missing_cat_trans_ = handle_missing_categorical(
                     X, self.categorical_features, self.cat_imputation
                 )
 
+        self.missing_ = self.missing_numeric_ or self.missing_categorical_
+
         X, y, self.outlier_trans_ = handle_outliers(
             X, y, self.numeric_features, random_state=self.random_state
         )
 
-        X, self.cat_trans_ = handle_categorical(X, self.categorical_features)
+        if self.has_categorical_:
+            X, self.cat_trans_, self.ohe_feature_names_ = handle_categorical(
+                X, self.categorical_features
+            )
 
         # TODO: zbadac wlyw powertransformera, dostosowac skew treshold
         # X, self.skew_trans_, self.skewed_feature_names_ = handle_skewed(
         #     X, self.numeric_features
         # )
-        X, self.scaler_ = handle_scaling(X, self.numeric_features, self.scaling)
+        if self.has_numeric_:
+            X, self.scaler_ = handle_scaling(X, self.numeric_features, self.scaling)
 
         if self.feature_selection:
             X, self.sel_trans_, self.selected_features_ = handle_selection(
@@ -115,9 +130,10 @@ class Preprocessor:
                 X, threshold=self.pca_threshold, random_state=self.random_state
             )
 
-        # TODO: Implement imbalanced handling
-        # if self.imbalanced_:
-        #     X, y, self.imbalanced_trans_ = handle_imbalanced(X, y)
+        if self.imbalanced_resampling and self.imbalanced_:
+            X, y, self.imbalanced_trans_ = handle_imbalanced(
+                X, y, self.resampling_strategy, random_state=self.random_state
+            )
 
         # self.skewed_ = len(self.skewed_feature_names_) > 0
         self.fitted = True
@@ -136,21 +152,22 @@ class Preprocessor:
         if not isinstance(X, pd.DataFrame):
             raise ValueError("Input data must be a pandas DataFrame.")
 
-        if self.missing_num_trans_:
+        if self.missing_numeric_:
             X[self.numeric_features] = self.missing_num_trans_.transform(
                 X[self.numeric_features]
             )
 
-        if self.missing_cat_trans_:
+        if self.missing_categorical_:
             X[self.categorical_features] = self.missing_cat_trans_.transform(
                 X[self.categorical_features]
             )
+
+        if self.has_categorical_:
             encoded_features = self.cat_trans_.transform(X[self.categorical_features])
             encoded_features_df = pd.DataFrame(
                 encoded_features,
-                columns=self.cat_trans_.get_feature_names_out(
-                    self.categorical_features
-                ),
+                columns=self.ohe_feature_names_,
+                index=X.index,
             )
             X = X.drop(columns=self.categorical_features).join(encoded_features_df)
 
@@ -159,7 +176,8 @@ class Preprocessor:
         #         X[self.skewed_feature_names_]
         #     )
 
-        X[self.numeric_features] = self.scaler_.transform(X[self.numeric_features])
+        if self.has_numeric_:
+            X[self.numeric_features] = self.scaler_.transform(X[self.numeric_features])
 
         if self.feature_selection:
             X = self.sel_trans_.transform(X)
