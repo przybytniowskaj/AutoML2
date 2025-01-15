@@ -10,24 +10,23 @@ from optuna.samplers import RandomSampler, TPESampler
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis  # noqa
 from sklearn.ensemble import RandomForestClassifier  # noqa
 from sklearn.linear_model import LogisticRegression  # noqa
-from sklearn.metrics import (  # roc_auc_score,
+from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
     f1_score,
     jaccard_score,
     precision_score,
     recall_score,
+    roc_auc_score,
 )
 from sklearn.model_selection import StratifiedKFold
 from sklearn.naive_bayes import GaussianNB  # noqa
 from sklearn.neighbors import KNeighborsClassifier  # noqa
 from sklearn.neural_network import MLPClassifier  # noqa
 from sklearn.svm import SVC  # noqa
+from xgboost import XGBClassifier  # noqa
 
 from mamut.utils.utils import adjust_search_spaces, model_param_dict, sample_parameter
-
-# from xgboost import XGBClassifier  # noqa
-
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 warnings.filterwarnings("ignore")
@@ -54,24 +53,30 @@ class ModelSelector:
         if not exclude_models:
             exclude_models = []
 
-        self.models = (
-            # Include models that are in model_param_dict but not those in exclude_models
-            [
-                (
-                    eval(model)(random_state=random_state)
-                    if "random_state" in eval(model)().get_params()
-                    else eval(model)()
-                )
-                for model in model_param_dict.keys()
-                if model not in exclude_models
-            ]
-        )
+        self.models = [
+            (
+                eval(model)(random_state=random_state)
+                if "random_state" in eval(model)().get_params()
+                else eval(model)()
+            )
+            for model in model_param_dict.keys()
+            if model not in exclude_models
+        ]
         self.n_classes_ = len(np.unique(y_train))
         self.binary = True if self.n_classes_ == 2 else False
         self.score_metric_name = copy(score_metric.__name__)
-        self.score_metric = lambda y_true, y_pred: score_metric(
-            y_true.reshape(-1, 1), y_pred.reshape(-1, 1), average="weighted"
-        )
+        self.roc = self.score_metric_name == "roc_auc_score"
+        if self.roc:
+            self.score_metric = lambda y_true, y_pred: score_metric(
+                y_true, y_pred, multi_class="ovr", average="weighted"
+            )
+        else:
+            self.score_metric = lambda y_true, y_pred: score_metric(
+                y_true.reshape(-1, 1),
+                y_pred.reshape(-1, 1),
+                multi_class="ovr",
+                average="weighted",
+            )
 
         self.optuna_sampler = (
             TPESampler(seed=random_state)
@@ -92,7 +97,6 @@ class ModelSelector:
             for param_name, value in param_grid.items()
         }
 
-        # Adjust if needed for compatibility between hyperparameters
         param = adjust_search_spaces(param, model)
 
         model.set_params(**param)
@@ -102,15 +106,17 @@ class ModelSelector:
             X_train_fold, X_val_fold = self.X_train[train_idx], self.X_train[val_idx]
             y_train_fold, y_val_fold = self.y_train[train_idx], self.y_train[val_idx]
 
-            # Reinitialize the model
             model = model.__class__(**model.get_params())
             model.fit(X_train_fold, y_train_fold)
-            val_pred = model.predict(X_val_fold)
+            val_pred = (
+                model.predict_proba(X_val_fold)
+                if self.roc
+                else model.predict(X_val_fold)
+            )
 
             cv_scores.append(self.score_metric(y_val_fold, val_pred))
         mean_cv_score = np.mean(cv_scores)
 
-        # Optimize wrt. the chosen metric
         return mean_cv_score
 
     def optimize_model(self, model):
@@ -131,7 +137,6 @@ class ModelSelector:
         params_for_best_model = None
         fitted_models = {}
         training_summary = pd.DataFrame()
-        scores_on_test = {}
 
         for model in self.models:
             print(f"Optimizing model: {model.__class__.__name__}")
@@ -140,29 +145,25 @@ class ModelSelector:
                 f"Best parameters: {params}, score: {score:.4f} {self.score_metric.__name__}\n"
             )
 
-            # TODO: Only for DEBUG
-            if isinstance(model, LogisticRegression):
-                print("MESSAGE ONLY FOR DEBUG: LR on test:")
-                m = LogisticRegression()
-                m.fit(self.X_train, self.y_train)
-                print(self._score_model_with_metrics(m))
-                print()
-
-            # Reinitialize the model with the best parameters
             model.set_params(**params)
             model = model.__class__(**model.get_params())
-
             model.fit(self.X_train, self.y_train)
             fitted_models[model.__class__.__name__] = model
 
-            score_on_test = self.score_metric(self.y_test, model.predict(self.X_test))
+            if self.roc:
+                score_on_test = self.score_metric(
+                    self.y_test, model.predict_proba(self.X_test)
+                )
+            else:
+                score_on_test = self.score_metric(
+                    self.y_test, model.predict(self.X_test)
+                )
 
             if score_on_test > score_for_best_model:
                 score_for_best_model = score_on_test
                 best_model = model
                 params_for_best_model = params
 
-            # Save the training report
             scores_on_test = self._score_model_with_metrics(model)
 
             training_summary = pd.concat(
@@ -186,7 +187,7 @@ class ModelSelector:
             f"and score {score_for_best_model:.4f} {self.score_metric.__name__}. \n"
             f"To access your best model use: get_best_model() function. \n"
             f"To create a powerful ensemble of models use: create_ensemble() function. \n"
-        )  # TODO: Change instructions if needed
+        )
 
         return (
             best_model,
@@ -197,13 +198,13 @@ class ModelSelector:
         )
 
     def _score_model_with_metrics(self, fitted_model):
-        # Check if the model is fitted
         if not hasattr(fitted_model, "predict"):
             raise ValueError(
                 "The model is not fitted and can not be scored with any metric."
             )
 
         y_pred = fitted_model.predict(self.X_test)
+        y_pred_proba = fitted_model.predict_proba(self.X_test)
         results = {
             "accuracy_score": accuracy_score(self.y_test, y_pred),
             "balanced_accuracy_score": balanced_accuracy_score(self.y_test, y_pred),
@@ -211,13 +212,11 @@ class ModelSelector:
             "recall_score": recall_score(self.y_test, y_pred, average="weighted"),
             "f1_score": f1_score(self.y_test, y_pred, average="weighted"),
             "jaccard_score": jaccard_score(self.y_test, y_pred, average="weighted"),
-            # TODO: Add ROC handling
-            # "roc_auc_score": roc_auc_score(
-            #     self.y_test, y_pred, multi_class="ovr"
-            # ),  # TODO: Will not work for multi-class
+            "roc_auc_score": roc_auc_score(
+                self.y_test, y_pred_proba, multi_class="ovr", average="weighted"
+            ),
         }
 
-        # Change the order of columns so that the self.score_metric is first
         results = {
             self.score_metric_name: results.pop(self.score_metric_name),
             **results,

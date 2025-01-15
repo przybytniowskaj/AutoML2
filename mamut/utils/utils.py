@@ -44,18 +44,7 @@ svc_params = {
     "kernel": (["linear", "poly", "rbf", "sigmoid"], "categorical"),
     "gamma": (1e-4, 1.0, "log"),
     "class_weight": (["balanced"], "categorical"),
-}
-
-lgb_params = {
-    "num_leaves": (15, 255, "int"),
-    "learning_rate": (1e-4, 0.4, "log"),
-    "n_estimators": (10, 1000, "int"),
-    "max_depth": (0, 10, "int"),
-    "min_child_samples": (5, 50, "int"),
-    "subsample": (0.4, 1.0, "float"),
-    "colsample_bytree": (0.4, 1.0, "float"),
-    "reg_alpha": (1e-4, 10.0, "log"),
-    "reg_lambda": (1e-4, 10.0, "log"),
+    "probability": ([True], "categorical"),
 }
 
 mlp_params = {
@@ -91,7 +80,7 @@ model_param_dict = {
     "LinearDiscriminantAnalysis": lda_params,
     "RandomForestClassifier": tree_params,
     "SVC": svc_params,
-    # "XGBClassifier": xgb_params,
+    "XGBClassifier": xgb_params,
     "MLPClassifier": mlp_params,
     "GaussianNB": gnb_params,
     "KNeighborsClassifier": knn_params,
