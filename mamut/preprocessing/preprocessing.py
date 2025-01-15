@@ -27,6 +27,8 @@ class Preprocessor:
         scaling: Literal["standard", "robust"] = "standard",
         feature_selection: bool = False,
         pca: bool = False,
+        pca_threshold: float = 0.95,
+        selection_threshold: float = 0.05,
         random_state: Optional[int] = 42,
     ) -> None:
         self.numeric_features = numeric_features
@@ -37,6 +39,8 @@ class Preprocessor:
         self.pca = pca
         self.random_state = random_state
         self.scaling = scaling
+        self.pca_threshold = pca_threshold
+        self.selection_threshold = selection_threshold
 
         self.imbalanced_ = None
         self.missing_ = None
@@ -103,12 +107,12 @@ class Preprocessor:
 
         if self.feature_selection:
             X, self.sel_trans_, self.selected_features_ = handle_selection(
-                X, y, threshold=0.05, random_state=self.random_state
+                X, y, threshold=self.selection_threshold, random_state=self.random_state
             )
 
         if self.pca:
             X, self.ext_trans_, self.pca_loadings_ = handle_extraction(
-                X, threshold=0.95, random_state=self.random_state
+                X, threshold=self.pca_threshold, random_state=self.random_state
             )
 
         # TODO: Implement imbalanced handling
