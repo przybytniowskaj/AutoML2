@@ -25,6 +25,8 @@ if __name__ == "__main__":
     mamut.fit(X, y)
     print("Fitted")
 
+    mamut.evaluate()
+
     best_model = mamut.best_model_
     print(
         f"Best mode ROC AUC Score: {roc_auc_score(y_test, best_model.predict_proba(pd.DataFrame(X_test))[:, 1])}"

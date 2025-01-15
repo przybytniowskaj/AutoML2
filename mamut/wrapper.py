@@ -1,22 +1,25 @@
 import logging
 import os
 import time
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional
 
 import joblib
 import pandas as pd
-from sklearn.base import BaseEstimator, clone
+from sklearn.base import clone
 from sklearn.ensemble import VotingClassifier
 from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
-from xgboost import XGBClassifier
 
 from mamut.preprocessing.preprocessing import Preprocessor
+from mamut.utils.utils import metric_dict
 
 from .evaluation import ModelEvaluator  # noqa
 from .model_selection import ModelSelector
-from .utils import metric_dict
+
+# from xgboost import XGBClassifier
+
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -51,16 +54,18 @@ class Mamut:
         self.random_state = random_state
 
         self.preprocessor = Preprocessor(**preprocessor_kwargs) if preprocess else None
-
         self.le = LabelEncoder()
-
         self.model_selector = None
+
+        self.X = None
+        self.y = None
         self.X_train = None
         self.X_test = None
         self.y_train = None
         self.y_test = None
 
-        self.raw_models_: Optional[List[Union[BaseEstimator, XGBClassifier]]] = None
+        # self.raw_models_: Optional[List[Union[BaseEstimator, XGBClassifier]]] = None
+        self.raw_models_ = None
         self.fitted_models_: Optional[List[Pipeline]] = None
         self.best_model_: Optional[Pipeline] = None
         self.best_score_ = None
@@ -91,6 +96,8 @@ class Mamut:
         self.X_test = X_test
         self.y_train = y_train
         self.y_test = y_test
+        self.X = X
+        self.y = y
 
         self.model_selector = ModelSelector(
             X_train,
@@ -151,11 +158,24 @@ class Mamut:
 
     def evaluate(self) -> None:
         self._check_fitted()
-        # TODO: Najprawodopodobniej evaluator nie musi zwracać DF, bo to jest w training_report. Powinno to być przeniesi # noqa
-        evaluator = ModelEvaluator(self.fitted_models_, self.X_test, self.y_test)
-        # _ = evaluator.evaluate()
-        evaluator.evaluate_to_html(self.training_summary_)
-        evaluator.plot_results()
+
+        # TODO: CHANGE, only for debug
+        m = KNeighborsClassifier(n_neighbors=5)
+        m.fit(self.X_train, self.y_train)
+        evaluator = ModelEvaluator(
+            [m],
+            X_test=self.X_test,
+            y_test=self.y_test,
+            X=self.X,
+            y=self.y,
+            optimizer=self.optimization_method,
+            metric=self.score_metric.__name__,
+            n_trials=self.n_iterations,
+            excluded_models=self.exclude_models,
+        )
+
+        evaluator.evaluate_to_html(self.training_summary_, self.score_metric)
+        # evaluator.plot_results()
 
     def save_best_model(self, path: str) -> None:
         # TODO: Think if necessary (all models are saved in the fitted_models dir)

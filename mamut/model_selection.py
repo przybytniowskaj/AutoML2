@@ -26,7 +26,7 @@ from sklearn.neural_network import MLPClassifier  # noqa
 from sklearn.svm import SVC  # noqa
 from xgboost import XGBClassifier  # noqa
 
-from mamut.utils import adjust_search_spaces, model_param_dict, sample_parameter
+from mamut.utils.utils import adjust_search_spaces, model_param_dict, sample_parameter
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 warnings.filterwarnings("ignore")
