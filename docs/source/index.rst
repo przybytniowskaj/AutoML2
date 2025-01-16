@@ -19,3 +19,4 @@ documentation for details.
 
    installation
    modules
+   mamut.preprocessing

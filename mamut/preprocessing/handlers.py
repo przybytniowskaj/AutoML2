@@ -66,9 +66,9 @@ def handle_imbalanced(
             Target array.
         strategy: Literal["SMOTE", "undersample", "combine"]
             Resampling method to use. Options:
-                - 'SMOTE': Synthetic Minority Oversampling Technique.
-                - 'undersample': Random undersampling of majority class.
-                - 'combine': SMOTE with Tomek links.
+            - 'SMOTE': Synthetic Minority Oversampling Technique.
+            - 'undersample': Random undersampling of majority class.
+            - 'combine': SMOTE with Tomek links.
         random_state: int
             Seed for reproducibility.
 

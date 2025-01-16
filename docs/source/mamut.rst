@@ -27,6 +27,7 @@ mamut.preprocessing module
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 mamut.utils module
 ------------------
