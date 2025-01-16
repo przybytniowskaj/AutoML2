@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # Check X_train and X_test from mamut
     # X_train = mamut.X_train
     # X_test = mamut.X_test
-    # y_train = mamut.y_train
+   # y_train = mamut.y_train
     # y_test = mamut.y_test
 
     # m = LogisticRegression()

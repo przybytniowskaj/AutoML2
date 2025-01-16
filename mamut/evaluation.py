@@ -1,16 +1,19 @@
 import os
 import time
+from datetime import datetime
 from typing import Callable, List
 import base64
 import platform
 
 import numpy as np
+import optuna
 import psutil
 
 from jinja2 import Environment, FileSystemLoader
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from matplotlib import gridspec
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -118,7 +121,7 @@ class ModelEvaluator:
     report_template_path : str = os.path.join(os.path.dirname(__file__), "utils")
 
     def __init__(self,
-                 models,
+                 models: dict,
                  # X_test and y_test are preprocessed. X and y are not.
                  X_test : np.ndarray,
                  y_test : np.ndarray,
@@ -127,6 +130,7 @@ class ModelEvaluator:
                  optimizer: str,
                  n_trials: int,
                  metric: str,
+                 studies: dict,
                  excluded_models : List[str] = None,
                  ):
         self.models = models
@@ -137,6 +141,7 @@ class ModelEvaluator:
         self.optimizer = optimizer
         self.n_trials = n_trials
         self.metric = metric
+        self.studies = studies
         self.excluded_models = excluded_models if excluded_models else []
 
         self.report_output_path = os.path.join(os.getcwd(), "mamut_report")
@@ -146,6 +151,14 @@ class ModelEvaluator:
         os.makedirs(self.report_output_path, exist_ok=True)
         os.makedirs(self.plot_output_path, exist_ok=True)
 
+        sns.set_context("notebook", font_scale=1.1)
+        plt.style.use("fivethirtyeight")
+        # Set background color of all plots to #f0f8ff;
+        plt.rcParams["axes.facecolor"] = "#f0f8ff"
+        plt.rcParams["figure.facecolor"] = "#f0f8ff"
+        # Set border color to skyblue
+        plt.rcParams["axes.edgecolor"] = "#007bb5"
+        plt.rcParams["figure.edgecolor"] = "#007bb5"
 
     def evaluate(self, training_summary : pd.DataFrame):
         return self.evaluate_to_html(training_summary)
@@ -158,19 +171,25 @@ class ModelEvaluator:
 
         return
 
-    def _plot_roc_auc_curve(self, show: bool = False, save: bool = True) -> None:
+    def _plot_roc_auc_curve(self, training_summary: pd.DataFrame, show: bool = False, save: bool = True) -> None:
         plt.figure(figsize=(10, 6))
+        top_3_models = training_summary["Model"].head(3).to_numpy()
 
-        for model in self.models:
-            y_pred = model.predict(self.X_test)
+        for model_name in top_3_models:
+            model = next(m for m in self.models.values() if m.__class__.__name__ == model_name)
+            y_pred = model.predict_proba(self.X_test)[:, 1]
             fpr, tpr, thresholds = roc_curve(self.y_test, y_pred)
             auc = roc_auc_score(self.y_test, y_pred)
-            plt.plot(fpr, tpr, label=f"{model.__class__.__name__} ROC ({auc:.2f})")
+            plt.plot(fpr, tpr, label=f"{model_name} ROC ({auc:.2f})")
 
-        plt.legend()
-        plt.title("ROC AUC Curve")
-        plt.xlabel("False Positive Rate")
-        plt.ylabel("True Positive Rate")
+        plt.plot([0, 1], [0, 1], 'k--', lw=2)
+        plt.xlim([-0.01, 1.01])
+        plt.ylim([-0.01, 1.05])
+        plt.xlabel("False Positive Rate", fontsize=14)
+        plt.ylabel("True Positive Rate", fontsize=14)
+        plt.legend(loc="lower right", fontsize=12)
+        plt.tight_layout()
+
         if show:
             plt.show()
         if save:
@@ -206,30 +225,63 @@ class ModelEvaluator:
         # plt.legend(loc="lower right")
         # plt.show()
 
-    def plot_all_confusion_matrices(self):
-        if not hasattr(self, "results_df"):
-            raise ValueError(
-                "You need to run evaluate() before plotting the confusion matrices."
-            )
+    def _plot_confusion_matrices(self, training_summary: pd.DataFrame, show: bool = False, save: bool = True) -> None:
+        fig = plt.figure(figsize=(18, 5))
+        top_3_models = training_summary["Model"].head(3).to_numpy()
+        # plt.figure(figsize=(24, 8))
+        gs = gridspec.GridSpec(1, 3, wspace=0.4)  # Create a grid with 1 row and 3 columns, with space between plots
 
-        n_cols = 2
-        n_rows = (len(self.models) + 1) // n_cols
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(10 * n_cols, 8 * n_rows))
-        axes = axes.flatten()
-
-        for ax, model in zip(axes, self.models):
+        for i, model_name in enumerate(top_3_models):
+            model = next(m for m in self.models.values() if m.__class__.__name__ == model_name)
             y_pred = model.predict(self.X_test)
             cm = confusion_matrix(self.y_test, y_pred)
-            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
-            ax.set_title(f"Confusion Matrix for {model.__class__.__name__}")
-            ax.set_xlabel("Predicted")
-            ax.set_ylabel("Actual")
 
-        for ax in axes[len(self.models) :]:
-            fig.delaxes(ax)
+            ax = fig.add_subplot(gs[i])
+            #plt.subplot(1, 3, i + 1)
+            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False, ax=ax)
+            plt.title(f"{model_name}", fontsize=14)
+            plt.xlabel("Predicted", fontsize=12)
+            plt.ylabel("Actual", fontsize=12)
 
+        #plt.subplots_adjust(wspace=0.4)  # Add space between plots
         plt.tight_layout()
-        plt.show()
+
+        if show:
+            plt.show()
+        if save:
+            plt.savefig(os.path.join(self.plot_output_path, "confusion_matrices.png"), format="png",
+                        bbox_inches="tight")
+
+        return
+
+    def _plot_hyperparameter_tuning_history(self, training_summary: pd.DataFrame, show: bool = False,
+                                            save: bool = True) -> None:
+        top_3_models = training_summary["Model"].head(3).to_numpy()
+
+        for i, model_name in enumerate(top_3_models):
+            study = self.studies.get(model_name)
+            if study:
+                plt.figure(figsize=(6, 5), facecolor="#f0f8ff")
+                ax = optuna.visualization.matplotlib.plot_optimization_history(study)
+                ax.set_facecolor("#f0f8ff")
+                ax.spines['top'].set_color("#007bb5")
+                ax.spines['right'].set_color("#007bb5")
+                ax.spines['bottom'].set_color("#007bb5")
+                ax.spines['left'].set_color("#007bb5")
+                ax.grid(color='grey')  # Change grid color to grey
+                ax.legend().set_visible(False)  # Remove legend
+                plt.title(f"{model_name} Tuning History", fontsize=14)
+                plt.xlabel("Trial", fontsize=12)
+                plt.ylabel(f"{self.metric} Value", fontsize=12)
+                plt.tight_layout()
+
+                if show:
+                    plt.show()
+                if save:
+                    plt.savefig(os.path.join(self.plot_output_path, f"hyperparameter_tuning_history_{i + 1}.png"),
+                                format="png", bbox_inches="tight")
+                plt.close()
+
         return
 
     def evaluate_to_html(self, training_summary : pd.DataFrame,
@@ -257,8 +309,7 @@ class ModelEvaluator:
             "duration": "Training Time [s]",
         })
         # Sort the training_summary DataFrame by the score_metric column
-        training_summary = (training_summary.sort_values(by=training_summary.columns[1], ascending=False)
-                            .reset_index())
+        training_summary = (training_summary.sort_values(by=training_summary.columns[1], ascending=False).reset_index(drop=True))
 
         # Apply the style to the DataFrame
         styled_training_summary = training_summary.style.apply(_highlight_first_cell, axis=1)
@@ -274,7 +325,9 @@ class ModelEvaluator:
         dataset_basic_list, feature_summary, class_distribution = _generate_dataset_overview(self.X, self.y)
 
         # Create and save roc_auc_curve as .png file:
-        self._plot_roc_auc_curve()
+        self._plot_roc_auc_curve(training_summary)
+        self._plot_confusion_matrices(training_summary)
+        self._plot_hyperparameter_tuning_history(training_summary)
 
         # Load the Jinja2 template placed in report_template_path:
         env = Environment(loader=FileSystemLoader(self.report_template_path))
@@ -300,7 +353,8 @@ class ModelEvaluator:
             preprocessing_list=_generate_preprocessing_steps_list(["SimpleImputer", "StandardScaler"]),
         )
 
-        with open(os.path.join(self.report_output_path, "report.html"), "w") as f:
+        time_signature = datetime.strptime(time_signature.strip(), "%d %B %Y, %I:%M %p").strftime("%d-%m-%Y_%H-%M")
+        with open(os.path.join(self.report_output_path, f"report_{time_signature}.html"), "w") as f:
             f.write(html_content)
 
         return html_content

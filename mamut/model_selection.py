@@ -24,7 +24,7 @@ from sklearn.naive_bayes import GaussianNB  # noqa
 from sklearn.neighbors import KNeighborsClassifier  # noqa
 from sklearn.neural_network import MLPClassifier  # noqa
 from sklearn.svm import SVC  # noqa
-from xgboost import XGBClassifier  # noqa
+# from xgboost import XGBClassifier  # noqa
 
 from mamut.utils.utils import adjust_search_spaces, model_param_dict, sample_parameter
 
@@ -74,8 +74,8 @@ class ModelSelector:
             self.score_metric = lambda y_true, y_pred: score_metric(
                 y_true.reshape(-1, 1),
                 y_pred.reshape(-1, 1),
-                multi_class="ovr",
-                average="weighted",
+                # multi_class="ovr",
+                # average="weighted",
             )
 
         self.optuna_sampler = (
@@ -129,7 +129,7 @@ class ModelSelector:
         )
         end_time = time.time()
         duration = end_time - start_time
-        return study.best_params, study.best_value, duration
+        return study.best_params, study.best_value, duration, study
 
     def compare_models(self):
         best_model = None
@@ -137,10 +137,11 @@ class ModelSelector:
         params_for_best_model = None
         fitted_models = {}
         training_summary = pd.DataFrame()
+        studies = {}
 
         for model in self.models:
             print(f"Optimizing model: {model.__class__.__name__}")
-            params, score, duration = self.optimize_model(model)
+            params, score, duration, study = self.optimize_model(model)
             print(
                 f"Best parameters: {params}, score: {score:.4f} {self.score_metric.__name__}\n"
             )
@@ -149,6 +150,7 @@ class ModelSelector:
             model = model.__class__(**model.get_params())
             model.fit(self.X_train, self.y_train)
             fitted_models[model.__class__.__name__] = model
+            studies[model.__class__.__name__] = study
 
             if self.roc:
                 score_on_test = self.score_metric(
@@ -185,7 +187,7 @@ class ModelSelector:
         print(
             f"Found best model: {best_model.__class__.__name__} with parameters {params_for_best_model} \n"
             f"and score {score_for_best_model:.4f} {self.score_metric.__name__}. \n"
-            f"To access your best model use: get_best_model() function. \n"
+            f"To access your best model use: mamut.best_model_ field. \n"
             f"To create a powerful ensemble of models use: create_ensemble() function. \n"
         )
 
@@ -195,6 +197,7 @@ class ModelSelector:
             score_for_best_model,
             fitted_models,
             training_summary,
+            studies
         )
 
     def _score_model_with_metrics(self, fitted_model):
@@ -212,9 +215,9 @@ class ModelSelector:
             "recall_score": recall_score(self.y_test, y_pred, average="weighted"),
             "f1_score": f1_score(self.y_test, y_pred, average="weighted"),
             "jaccard_score": jaccard_score(self.y_test, y_pred, average="weighted"),
-            "roc_auc_score": roc_auc_score(
-                self.y_test, y_pred_proba, multi_class="ovr", average="weighted"
-            ),
+            # "roc_auc_score": roc_auc_score(
+            #     self.y_test, y_pred_proba, multi_class="ovr", average="weighted"
+            # ),
         }
 
         results = {

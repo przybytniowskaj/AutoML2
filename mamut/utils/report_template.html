@@ -49,6 +49,10 @@
     table tbody tr:last-of-type {
         border-bottom: 2px solid #007bb5; /* skyblue */
     }
+    img {
+        max-width: 100%;
+        height: auto;
+    }
     .dataset-overview {
         list-style-type: none;
         padding: 0;
@@ -144,7 +148,7 @@
     </div>
     <div class="section">
         <div style="display: flex; justify-content: space-between;">
-            <div style="width: 40%; margin-left:1vw;">
+            <div style="width: 40%; margin-left:5%;">
                 <p>Below you will see a list of <b>preprocessing steps</b> performed on the dataset before any
                     models were applied. Preprocessing steps are divided into categories of tasks that
                     they are responsible for. The selection of certain steps can be highly configured
@@ -153,7 +157,7 @@
                 </p>
             </div>
             <div style="width: 1px; background-color: #ddd; margin: 0 1vw;"></div>
-            <div style="width: 40%; margin-left:1vw;">
+            <div style="width: 40%; margin-right:5%;">
                 <p>Pipeline:</p>
                 <ul style="list-style-type:'&#8627;'">
                     {{ preprocessing_list | safe }}
@@ -177,7 +181,7 @@
             Each model has been tuned for optimal performance using the hyperparameter tuning in Optuna.
             The optimizer used for tuning was: <b>{{ optimizer }}</b>. Optimization was performed with
             respect to the metric: <b>{{ metric }}</b> for <b>{{ n_trials }}</b> iterations. Access any model's
-            hyperparameters by getting the models from <i>mamut.fitted_models_</i> field and running <i>.get_params()</i> on
+            hyperparameters by getting the models from <i>mamut.raw_fitted_models_</i> field and running <i>.get_params()</i> on
             your model of interest. <br>
             After tuning, all models were evaluated on the <b>test set</b> that was split from the original dataset.
             The best model was <b><i>{{ best_model }}</i></b>.
@@ -191,11 +195,27 @@
         {{ training_summary | safe }}
     </div>
 
-    <div class="heading">
-        <h2>ROC AUC Curve</h2>
+    <div class="heading2">
+        <h2>Receiver Operating Characteristic (ROC) Curve for top 3 models</h2>
     </div>
     <div class="section">
         <img src="plots/roc_auc_curve.png" alt="ROC AUC Curve">
+    </div>
+
+    <div class="heading2">
+        <h2>Confusion Matrix for top 3 models</h2>
+    </div>
+    <div class="section">
+        <img src="plots/confusion_matrices.png" alt="Confusion Matrix">
+    </div>
+
+    <div class="heading2">
+        <h2>Detailed Hyperparameter Tuning History for top 3 models</h2>
+    </div>
+    <div class="section" style="display: flex; justify-content: space-between;">
+        <img src="plots/hyperparameter_tuning_history_1.png" alt="Hyperparameter Tuning History 1" style="width: 32%;">
+        <img src="plots/hyperparameter_tuning_history_2.png" alt="Hyperparameter Tuning History 2" style="width: 32%;">
+        <img src="plots/hyperparameter_tuning_history_3.png" alt="Hyperparameter Tuning History 3" style="width: 32%;">
     </div>
 
 </body>

@@ -66,11 +66,12 @@ class Mamut:
         self.y_test = None
 
         # self.raw_models_: Optional[List[Union[BaseEstimator, XGBClassifier]]] = None
-        self.raw_models_ = None
+        self.raw_fitted_models_ = None
         self.fitted_models_ : Optional[List[Pipeline]] = None
         self.best_model_ : Optional[Pipeline] = None
         self.best_score_ = None
         self.training_summary_ = None
+        self.optuna_studies_ = None
 
         self.ensemble_: Optional[Pipeline] = None
         self.greedy_ensemble_: Optional[Pipeline] = None
@@ -117,9 +118,11 @@ class Mamut:
             score_for_best_model,
             fitted_models,
             training_summary,
+            studies,
         ) = self.model_selector.compare_models()
 
-        self.raw_models_ = fitted_models
+        self.raw_fitted_models_ = fitted_models
+        self.optuna_studies_ = studies
         self.fitted_models_ = [
             Pipeline([("preprocessor", self.preprocessor), ("model", model)])
             for model in fitted_models.values()
@@ -162,13 +165,13 @@ class Mamut:
         # TODO: CHANGE, only for debug
         m = KNeighborsClassifier(n_neighbors=5)
         m.fit(self.X_train, self.y_train)
-        evaluator = ModelEvaluator([m], X_test=self.X_test, y_test=self.y_test,
+        evaluator = ModelEvaluator(self.raw_fitted_models_, X_test=self.X_test, y_test=self.y_test,
                                    X=self.X, y=self.y, optimizer=self.optimization_method,
                                    metric=self.score_metric.__name__, n_trials=self.n_iterations,
-                                   excluded_models=self.exclude_models
+                                   excluded_models=self.exclude_models, studies=self.optuna_studies_,
                                    )
 
-        evaluator.evaluate_to_html(self.training_summary_, self.score_metric)
+        evaluator.evaluate_to_html(self.training_summary_)
         # evaluator.plot_results()
 
     def save_best_model(self, path: str) -> None:

@@ -174,3 +174,4 @@ cython_debug/
 .pypirc
 /mamut/playground.py
 /debug/check_model_reinitialization.py
+/mamut/mamut_report/
