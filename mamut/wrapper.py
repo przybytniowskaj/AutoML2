@@ -5,25 +5,24 @@ from typing import List, Literal, Optional
 
 import joblib
 import pandas as pd
-from sklearn.base import BaseEstimator, clone
+from sklearn.base import clone
 from sklearn.ensemble import VotingClassifier
+from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
-# from xgboost import XGBClassifier
 
 from mamut.preprocessing.preprocessing import Preprocessor
+from mamut.utils.utils import metric_dict
 
 from .evaluation import ModelEvaluator  # noqa
 from .model_selection import ModelSelector
-from mamut.utils.utils import metric_dict
+
+# from xgboost import XGBClassifier
+
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-
 
 
 class Mamut:
@@ -69,6 +68,7 @@ class Mamut:
         self.raw_fitted_models_ = None
         self.fitted_models_ : Optional[List[Pipeline]] = None
         self.best_model_ : Optional[Pipeline] = None
+
         self.best_score_ = None
         self.training_summary_ = None
         self.optuna_studies_ = None
@@ -84,6 +84,7 @@ class Mamut:
             self.imbalanced_ = True
 
         y = self.le.fit_transform(y)
+        y = pd.Series(y)
 
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, stratify=y
@@ -170,6 +171,7 @@ class Mamut:
                                    metric=self.score_metric.__name__, n_trials=self.n_iterations,
                                    excluded_models=self.exclude_models, studies=self.optuna_studies_,
                                    )
+
 
         evaluator.evaluate_to_html(self.training_summary_)
         # evaluator.plot_results()

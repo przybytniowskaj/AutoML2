@@ -1,5 +1,5 @@
 <div style="text-align: center;">
-  <img src="logo.webp" alt="MAMUT Logo" width="200"/>
+  <img src="docs/source/_static/logo.webp" alt="MAMUT Logo" width="200"/>
   <h2>Machine Automated Modelling and Utility Toolkit</h2>
 </div>
 

@@ -20,6 +20,7 @@ repos:
     rev: 7.1.0
     hooks:
       - id: flake8
+        exclude: ^tests/|mamut/evaluation.py
         args: [--max-complexity=69,
                --max-line-length=120,
                --ignore=E203

@@ -1,38 +1,62 @@
 import numpy as np
-import pandas as pd
-from sklearn.datasets import load_iris
 
 from mamut.wrapper import Mamut
+from tests.mock import X, X_missing, binary_y, imbalanced_y, multiclass_y
 
-iris = load_iris()
 
-
-def test_multiclass():
+def test_wrapper_binary_target(X, binary_y):
     mamut = Mamut(n_iterations=1)
-    X, y = pd.DataFrame(iris.data, columns=iris.feature_names), pd.DataFrame(
-        iris.target, columns=["target"]
-    )
-    print(y.nunique())
-    print(type(X), type(y))
-    print(y.shape)
-    mamut.fit(X, y)
-    model = mamut.best_model_
-    pred = model.predict(X)
+    mamut.fit(X, binary_y)
+    pred = mamut.best_model_.predict(X)
 
+    assert mamut.best_score_ is not None
     assert isinstance(pred, np.ndarray)
 
 
-def test_binary():
+def test_wrapper_multiclass_target(X, multiclass_y):
     mamut = Mamut(n_iterations=1)
-    X, y = (
-        pd.DataFrame(iris.data, columns=iris.feature_names)[:100],
-        pd.DataFrame(iris.target, columns=["target"])[:100],
-    )
-    print(y.nunique())
-    print(type(X), type(y))
-    print(y.shape)
-    mamut.fit(X, y)
-    model = mamut.best_model_
-    pred = model.predict(X)
+    mamut.fit(X, multiclass_y)
+    pred = mamut.best_model_.predict(X)
 
+    assert mamut.best_score_ is not None
+    assert isinstance(pred, np.ndarray)
+
+
+def test_wrapper_imbalanced_target(X, imbalanced_y):
+    mamut = Mamut(n_iterations=1)
+    mamut.fit(X, imbalanced_y)
+    pred = mamut.best_model_.predict(X)
+
+    n_before = X.shape[0]
+    n_after = mamut.X_train.shape[0] + mamut.X_test.shape[0]
+
+    assert n_after > n_before
+    assert mamut.best_score_ is not None
+    assert isinstance(pred, np.ndarray)
+
+
+def test_wrapper_missing_data(X_missing, binary_y):
+    mamut = Mamut(n_iterations=1)
+    mamut.fit(X_missing, binary_y)
+    pred = mamut.best_model_.predict(X_missing)
+
+    assert mamut.best_score_ is not None
+    assert isinstance(pred, np.ndarray)
+
+
+def test_wrapper_pca(X, binary_y):
+    mamut = Mamut(n_iterations=1, pca=True)
+    mamut.fit(X, binary_y)
+    pred = mamut.best_model_.predict(X)
+
+    assert mamut.best_score_ is not None
+    assert isinstance(pred, np.ndarray)
+
+
+def test_wrapper_selection(X, binary_y):
+    mamut = Mamut(n_iterations=1, feature_selection=True)
+    mamut.fit(X, binary_y)
+    pred = mamut.best_model_.predict(X)
+
+    assert mamut.best_score_ is not None
     assert isinstance(pred, np.ndarray)

@@ -75,7 +75,11 @@ class ModelSelector:
                 y_true.reshape(-1, 1),
                 y_pred.reshape(-1, 1),
                 # multi_class="ovr",
+<<<<<<< HEAD
                 # average="weighted",
+=======
+                average="weighted",
+>>>>>>> 15f815d01657d5a54de886e7317646ba0bf77dca
             )
 
         self.optuna_sampler = (
@@ -153,12 +157,17 @@ class ModelSelector:
             studies[model.__class__.__name__] = study
 
             if self.roc:
-                score_on_test = self.score_metric(
-                    self.y_test, model.predict_proba(self.X_test)
-                )
+                if self.binary:
+                    score_on_test = self.score_metric(
+                        self.y_test.values, model.predict_proba(self.X_test)[:, 1]
+                    )
+                else:
+                    score_on_test = self.score_metric(
+                        self.y_test.values, model.predict_proba(self.X_test)
+                    )
             else:
                 score_on_test = self.score_metric(
-                    self.y_test, model.predict(self.X_test)
+                    self.y_test.values, model.predict(self.X_test)
                 )
 
             if score_on_test > score_for_best_model:
@@ -208,6 +217,9 @@ class ModelSelector:
 
         y_pred = fitted_model.predict(self.X_test)
         y_pred_proba = fitted_model.predict_proba(self.X_test)
+        if self.binary:
+            y_pred_proba = y_pred_proba[:, 1]
+
         results = {
             "accuracy_score": accuracy_score(self.y_test, y_pred),
             "balanced_accuracy_score": balanced_accuracy_score(self.y_test, y_pred),

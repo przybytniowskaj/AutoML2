@@ -1,19 +1,20 @@
+import base64
 import os
+import platform
 import time
 from datetime import datetime
 from typing import Callable, List
-import base64
-import platform
 
-import numpy as np
 import optuna
-import psutil
 
-from jinja2 import Environment, FileSystemLoader
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import psutil
 import seaborn as sns
 from matplotlib import gridspec
+
+from jinja2 import Environment, FileSystemLoader
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -27,12 +28,13 @@ from sklearn.metrics import (
 )
 
 from mamut.preprocessing.handlers import handle_outliers
-from mamut.utils.utils import preprocessing_steps, model_param_dict
+from mamut.utils.utils import model_param_dict, preprocessing_steps
 
 
 def _get_base64_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
+
 
 def _generate_experiment_setup_table():
     system_info = {
@@ -42,7 +44,7 @@ def _generate_experiment_setup_table():
         "Release": platform.release(),
         "Version": platform.version(),
         "Python Version": platform.python_version(),
-        "RAM (GB)": round(psutil.virtual_memory().total / (1024 ** 3), 2),
+        "RAM (GB)": round(psutil.virtual_memory().total / (1024**3), 2),
         "CPU Cores": psutil.cpu_count(logical=True),
     }
 
@@ -54,7 +56,10 @@ def _generate_experiment_setup_table():
 
     return html_table
 
-def _generate_dataset_overview(X: pd.DataFrame, y: pd.Series) -> (List[int], pd.DataFrame, pd.DataFrame):
+
+def _generate_dataset_overview(
+    X: pd.DataFrame, y: pd.Series
+) -> (List[int], pd.DataFrame, pd.DataFrame):
     # Dataset shape
     n_observations, n_features = X.shape
 
@@ -72,7 +77,12 @@ def _generate_dataset_overview(X: pd.DataFrame, y: pd.Series) -> (List[int], pd.
     feature_summary = X.dtypes.reset_index()
     feature_summary.columns = ["Feature", "Data Type"]
     feature_summary["Type"] = feature_summary["Data Type"].apply(
-        lambda dt: "Categorical" if dt == "object" or isinstance(dt, pd.CategoricalDtype) else "Numerical")
+        lambda dt: (
+            "Categorical"
+            if dt == "object" or isinstance(dt, pd.CategoricalDtype)
+            else "Numerical"
+        )
+    )
     if len(feature_summary) > 10:
         feature_summary = feature_summary.head(10)
     feature_summary = feature_summary[["Feature", "Type", "Data Type"]]
@@ -85,6 +95,7 @@ def _generate_dataset_overview(X: pd.DataFrame, y: pd.Series) -> (List[int], pd.
 
     return dataset_basic_list, feature_summary, class_distribution
 
+
 def _generate_preprocessing_steps_list(steps: List[str]) -> str:
     # Initialize a dictionary to hold categorized steps
     categorized_steps = {}
@@ -95,7 +106,9 @@ def _generate_preprocessing_steps_list(steps: List[str]) -> str:
             category, description = preprocessing_steps[step]
             if category not in categorized_steps:
                 categorized_steps[category] = []
-            categorized_steps[category].append(f"<strong>{step}</strong>: {description}")
+            categorized_steps[category].append(
+                f"<strong>{step}</strong>: {description}"
+            )
 
     # Generate HTML unordered list with some styling
     html_prep_list = ""
@@ -106,6 +119,7 @@ def _generate_preprocessing_steps_list(steps: List[str]) -> str:
         html_prep_list += "</ul></li>"
 
     return html_prep_list
+
 
 def _generate_models_list(excluded_models: List[str]) -> List[str]:
     # Get all available models
@@ -118,7 +132,7 @@ def _generate_models_list(excluded_models: List[str]) -> List[str]:
 
 class ModelEvaluator:
 
-    report_template_path : str = os.path.join(os.path.dirname(__file__), "utils")
+    report_template_path: str = os.path.join(os.path.dirname(__file__), "utils")
 
     def __init__(self,
                  models: dict,
@@ -133,6 +147,7 @@ class ModelEvaluator:
                  studies: dict,
                  excluded_models : List[str] = None,
                  ):
+
         self.models = models
         self.X = X
         self.y = y
@@ -160,7 +175,7 @@ class ModelEvaluator:
         plt.rcParams["axes.edgecolor"] = "#007bb5"
         plt.rcParams["figure.edgecolor"] = "#007bb5"
 
-    def evaluate(self, training_summary : pd.DataFrame):
+    def evaluate(self, training_summary: pd.DataFrame):
         return self.evaluate_to_html(training_summary)
 
     def plot_results(self):
@@ -193,7 +208,11 @@ class ModelEvaluator:
         if show:
             plt.show()
         if save:
-            plt.savefig(os.path.join(self.plot_output_path, "roc_auc_curve.png"), format="png", bbox_inches="tight")
+            plt.savefig(
+                os.path.join(self.plot_output_path, "roc_auc_curve.png"),
+                format="png",
+                bbox_inches="tight",
+            )
 
         return
 
@@ -284,8 +303,10 @@ class ModelEvaluator:
 
         return
 
-    def evaluate_to_html(self, training_summary : pd.DataFrame,
-                         ):
+    def evaluate_to_html(
+        self,
+        training_summary: pd.DataFrame,
+    ):
         # Check if the training_summary is a DataFrame and not empty!:
         if (
             training_summary is None
@@ -297,22 +318,28 @@ class ModelEvaluator:
             )
 
         # Preprocess the training_summary DataFrame:
-        training_summary = training_summary.rename(columns={
-            "model": "Model",
-            "accuracy_score": "Accuracy",
-            "balanced_accuracy_score": "Balanced Accuracy",
-            "precision_score": "Precision",
-            "recall_score": "Recall",
-            "f1_score": "F1 Score",
-            "jaccard_score": "Jaccard Score",
-            "roc_auc_score": "ROC AUC",
-            "duration": "Training Time [s]",
-        })
+        training_summary = training_summary.rename(
+            columns={
+                "model": "Model",
+                "accuracy_score": "Accuracy",
+                "balanced_accuracy_score": "Balanced Accuracy",
+                "precision_score": "Precision",
+                "recall_score": "Recall",
+                "f1_score": "F1 Score",
+                "jaccard_score": "Jaccard Score",
+                "roc_auc_score": "ROC AUC",
+                "duration": "Training Time [s]",
+            }
+        )
         # Sort the training_summary DataFrame by the score_metric column
-        training_summary = (training_summary.sort_values(by=training_summary.columns[1], ascending=False).reset_index(drop=True))
+        training_summary = training_summary.sort_values(
+            by=training_summary.columns[1], ascending=False
+        ).reset_index()
 
         # Apply the style to the DataFrame
-        styled_training_summary = training_summary.style.apply(_highlight_first_cell, axis=1)
+        styled_training_summary = training_summary.style.apply(
+            _highlight_first_cell, axis=1
+        )
 
         # Transform summary to HTML:
         training_summary_html = styled_training_summary.to_html()
@@ -322,7 +349,9 @@ class ModelEvaluator:
         base64_image = _get_base64_image(image_header_path)
 
         # Calculate Dataset Overview:
-        dataset_basic_list, feature_summary, class_distribution = _generate_dataset_overview(self.X, self.y)
+        dataset_basic_list, feature_summary, class_distribution = (
+            _generate_dataset_overview(self.X, self.y)
+        )
 
         # Create and save roc_auc_curve as .png file:
         self._plot_roc_auc_curve(training_summary)
@@ -342,7 +371,11 @@ class ModelEvaluator:
             image_header=base64_image,
             experiment_setup=_generate_experiment_setup_table(),
             models_evaluated=_generate_models_list(self.excluded_models),
-            optimizer="Tree-structured Parzen Estimator" if self.optimizer == "bayes" else "Random Search",
+            optimizer=(
+                "Tree-structured Parzen Estimator"
+                if self.optimizer == "bayes"
+                else "Random Search"
+            ),
             metric=self.metric,
             n_trials=self.n_trials,
             best_model=training_summary.iloc[0]["Model"],
@@ -350,7 +383,9 @@ class ModelEvaluator:
             feature_summary=feature_summary.to_html(index=False),
             class_distribution=class_distribution.to_html(index=False),
             # TODO: Get preprocessing steps from Preprocessor
-            preprocessing_list=_generate_preprocessing_steps_list(["SimpleImputer", "StandardScaler"]),
+            preprocessing_list=_generate_preprocessing_steps_list(
+                ["SimpleImputer", "StandardScaler"]
+            ),
         )
 
         time_signature = datetime.strptime(time_signature.strip(), "%d %B %Y, %I:%M %p").strftime("%d-%m-%Y_%H-%M")
@@ -359,6 +394,13 @@ class ModelEvaluator:
 
         return html_content
 
+
 def _highlight_first_cell(s):
-    return ['background-color: yellow' if (i == 0 and s.name == 0) or (i == 1 and s.name == 0) else ''
-            for i in range(len(s))]
+    return [
+        (
+            "background-color: yellow"
+            if (i == 0 and s.name == 0) or (i == 1 and s.name == 0)
+            else ""
+        )
+        for i in range(len(s))
+    ]
