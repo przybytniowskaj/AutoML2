@@ -74,12 +74,7 @@ class ModelSelector:
             self.score_metric = lambda y_true, y_pred: score_metric(
                 y_true.reshape(-1, 1),
                 y_pred.reshape(-1, 1),
-                # multi_class="ovr",
-<<<<<<< HEAD
-                # average="weighted",
-=======
-                average="weighted",
->>>>>>> 15f815d01657d5a54de886e7317646ba0bf77dca
+                average="weighted"
             )
 
         self.optuna_sampler = (
