@@ -47,13 +47,13 @@ if __name__ == "__main__":
     # Check X_train and X_test from mamut
     # X_train = mamut.X_train
     # X_test = mamut.X_test
-   # y_train = mamut.y_train
-    # y_test = mamut.y_test
+# y_train = mamut.y_train
+# y_test = mamut.y_test
 
-    # m = LogisticRegression()
-    # print("Initialized")
-    # print(y_train)
-    # m.fit(X_train, y_train)
-    # print("Fitted")
-    # y_pred = m.predict(X_test)
-    # print("ROC AUC Score: ", roc_auc_score(y_test, y_pred))
+# m = LogisticRegression()
+# print("Initialized")
+# print(y_train)
+# m.fit(X_train, y_train)
+# print("Fitted")
+# y_pred = m.predict(X_test)
+# print("ROC AUC Score: ", roc_auc_score(y_test, y_pred))

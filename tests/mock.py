@@ -16,7 +16,7 @@ def X():
 @pytest.fixture
 def X_missing():
     num1 = np.random.normal(0, 1, 100)
-    num2 = np.random.randint(1, 100, 100)
+    num2 = np.random.randint(1, 100, 100).astype(float)
     cat1 = np.random.choice(["A", "B", "C"], 100)
     cat2 = np.random.choice(["X", "Y", "Z"], 100)
 
@@ -24,6 +24,11 @@ def X_missing():
     missing2_ids = np.random.choice(range(100), 10)
     missing3_ids = np.random.choice(range(100), 10)
     missing4_ids = np.random.choice(range(100), 10)
+
+    num1[missing1_ids] = np.nan
+    num2[missing2_ids] = np.nan
+    cat1[missing3_ids] = np.nan
+    cat2[missing4_ids] = np.nan
 
     return pd.DataFrame({"num1": num1, "num2": num2, "cat1": cat1, "cat2": cat2})
 

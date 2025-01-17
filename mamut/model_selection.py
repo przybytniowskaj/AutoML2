@@ -24,9 +24,11 @@ from sklearn.naive_bayes import GaussianNB  # noqa
 from sklearn.neighbors import KNeighborsClassifier  # noqa
 from sklearn.neural_network import MLPClassifier  # noqa
 from sklearn.svm import SVC  # noqa
-# from xgboost import XGBClassifier  # noqa
 
 from mamut.utils.utils import adjust_search_spaces, model_param_dict, sample_parameter
+
+# from xgboost import XGBClassifier  # noqa
+
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 warnings.filterwarnings("ignore")
@@ -72,9 +74,7 @@ class ModelSelector:
             )
         else:
             self.score_metric = lambda y_true, y_pred: score_metric(
-                y_true.reshape(-1, 1),
-                y_pred.reshape(-1, 1),
-                average="weighted"
+                y_true.reshape(-1, 1), y_pred.reshape(-1, 1), average="weighted"
             )
 
         self.optuna_sampler = (
@@ -201,7 +201,7 @@ class ModelSelector:
             score_for_best_model,
             fitted_models,
             training_summary,
-            studies
+            studies,
         )
 
     def _score_model_with_metrics(self, fitted_model):
@@ -222,9 +222,9 @@ class ModelSelector:
             "recall_score": recall_score(self.y_test, y_pred, average="weighted"),
             "f1_score": f1_score(self.y_test, y_pred, average="weighted"),
             "jaccard_score": jaccard_score(self.y_test, y_pred, average="weighted"),
-            # "roc_auc_score": roc_auc_score(
-            #     self.y_test, y_pred_proba, multi_class="ovr", average="weighted"
-            # ),
+            "roc_auc_score": roc_auc_score(
+                self.y_test, y_pred_proba, multi_class="ovr", average="weighted"
+            ),
         }
 
         results = {
