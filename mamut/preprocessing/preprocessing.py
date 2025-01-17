@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
 
-from mamut.preprocessing.handlers import (  # handle_skewed,
+from mamut.preprocessing.handlers import (
     handle_categorical,
     handle_extraction,
     handle_imbalanced,
@@ -18,6 +18,52 @@ from mamut.preprocessing.handlers import (  # handle_skewed,
 
 
 class Preprocessor:
+    """
+    A class used to preprocess data for machine learning models.
+
+    Attributes
+    ----------
+    numeric_features : Optional[List[str]]
+        List of numeric feature names.
+    categorical_features : Optional[List[str]]
+        List of categorical feature names.
+    num_imputation : Literal["iterative", "knn", "mean", "median", "constant"]
+        Method for numeric imputation.
+    cat_imputation : Literal["most_frequent", "constant"]
+        Method for categorical imputation.
+    scaling : Literal["standard", "robust"]
+        Method for scaling numeric features.
+    feature_selection : bool
+        Whether to perform feature selection.
+    pca : bool
+        Whether to perform PCA for feature extraction.
+    imbalanced_resampling : bool
+        Whether to perform resampling to handle imbalanced data.
+    resampling_strategy : Literal["SMOTE", "undersample", "combine"]
+        Strategy for resampling imbalanced data.
+    skew_threshold : float
+        Threshold for skewness correction.
+    pca_threshold : float
+        Threshold for PCA feature extraction.
+    selection_threshold : float
+        Threshold for feature selection.
+    imbalance_threshold : float
+        Threshold for detecting imbalanced data.
+    random_state : Optional[int]
+        Random state for reproducibility.
+
+    Methods
+    -------
+    fit_transform(X: pd.DataFrame, y: pd.Series) -> (np.ndarray, np.ndarray, Pipeline)
+        Fits the preprocessor and transforms the data.
+    transform(X: pd.DataFrame) -> np.ndarray
+        Transforms the data using the fitted preprocessor.
+    report() -> dict
+        Returns a report of the preprocessing steps.
+    _check_fitted()
+        Checks if the preprocessor has been fitted.
+    """
+
     def __init__(
         self,
         numeric_features: Optional[List[str]] = None,
@@ -37,6 +83,40 @@ class Preprocessor:
         imbalance_threshold: float = 0.10,
         random_state: Optional[int] = 42,
     ) -> None:
+        """
+        Constructs all the necessary attributes for the Preprocessor object.
+
+        Parameters
+        ----------
+        numeric_features : Optional[List[str]]
+            List of numeric feature names.
+        categorical_features : Optional[List[str]]
+            List of categorical feature names.
+        num_imputation : Literal["iterative", "knn", "mean", "median", "constant"]
+            Method for numeric imputation.
+        cat_imputation : Literal["most_frequent", "constant"]
+            Method for categorical imputation.
+        scaling : Literal["standard", "robust"]
+            Method for scaling numeric features.
+        feature_selection : bool
+            Whether to perform feature selection.
+        pca : bool
+            Whether to perform PCA for feature extraction.
+        imbalanced_resampling : bool
+            Whether to perform resampling to handle imbalanced data.
+        resampling_strategy : Literal["SMOTE", "undersample", "combine"]
+            Strategy for resampling imbalanced data.
+        skew_threshold : float
+            Threshold for skewness correction.
+        pca_threshold : float
+            Threshold for PCA feature extraction.
+        selection_threshold : float
+            Threshold for feature selection.
+        imbalance_threshold : float
+            Threshold for detecting imbalanced data.
+        random_state : Optional[int]
+            Random state for reproducibility.
+        """
         self.numeric_features = numeric_features
         self.categorical_features = categorical_features
         self.num_imputation = num_imputation
@@ -82,7 +162,25 @@ class Preprocessor:
     def fit_transform(
         self, X: pd.DataFrame, y: pd.Series
     ) -> (np.ndarray, np.ndarray, Pipeline):
+        """
+        Fits the preprocessor and transforms the data.
 
+        Parameters
+        ----------
+        X : pd.DataFrame
+            The input features.
+        y : pd.Series
+            The target variable.
+
+        Returns
+        -------
+        np.ndarray
+            Transformed features.
+        np.ndarray
+            Transformed target variable.
+        Pipeline
+            The fitted pipeline.
+        """
         self.report_ = dict()
 
         if not self.numeric_features:
@@ -224,6 +322,19 @@ class Preprocessor:
         return X, y
 
     def transform(self, X: pd.DataFrame) -> np.ndarray:
+        """
+        Transforms the data using the fitted preprocessor.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            The input features.
+
+        Returns
+        -------
+        np.ndarray
+            Transformed features.
+        """
         self._check_fitted()
         if not isinstance(X, pd.DataFrame):
             raise ValueError("Input data must be a pandas DataFrame.")
@@ -268,9 +379,25 @@ class Preprocessor:
         return X
 
     def report(self):
+        """
+        Returns a report of the preprocessing steps.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the report of the preprocessing steps.
+        """
         self._check_fitted()
         return self.report_
 
     def _check_fitted(self):
+        """
+        Checks if the preprocessor has been fitted.
+
+        Raises
+        ------
+        RuntimeError
+            If the preprocessor has not been fitted.
+        """
         if not self.fitted:
             raise RuntimeError("Preprocessor has not been fitted.")

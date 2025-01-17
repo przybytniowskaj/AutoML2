@@ -26,6 +26,82 @@ logging.basicConfig(level=logging.INFO)
 
 
 class Mamut:
+    """
+    A class used to manage the machine learning pipeline, including preprocessing, model selection, and evaluation.
+
+    Attributes
+    ----------
+    preprocess : bool
+        Whether to apply preprocessing to the data.
+    imb_threshold : float
+        Threshold for detecting imbalanced data.
+    exclude_models : Optional[List[str]]
+        List of models to exclude from selection.
+    score_metric : callable
+        Metric used to evaluate model performance.
+    optimization_method : Literal["random_search", "bayes"]
+        Method for hyperparameter optimization.
+    n_iterations : Optional[int]
+        Number of iterations for optimization.
+    random_state : Optional[int]
+        Random state for reproducibility.
+    preprocessor : Preprocessor
+        Preprocessor object for data preprocessing.
+    le : LabelEncoder
+        Label encoder for target variable.
+    model_selector : ModelSelector
+        Object for model selection.
+    X : pd.DataFrame
+        Input features.
+    y : pd.Series
+        Target variable.
+    X_train : pd.DataFrame
+        Training features.
+    X_test : pd.DataFrame
+        Test features.
+    y_train : pd.Series
+        Training target variable.
+    y_test : pd.Series
+        Test target variable.
+    raw_fitted_models_ : Optional[List[Pipeline]]
+        List of raw fitted models.
+    fitted_models_ : Optional[List[Pipeline]]
+        List of fitted models with preprocessing.
+    best_model_ : Optional[Pipeline]
+        Best model pipeline.
+    best_score_ : float
+        Best model score.
+    training_summary_ : dict
+        Summary of the training process.
+    optuna_studies_ : dict
+        Optuna studies for hyperparameter optimization.
+    ensemble_ : Optional[Pipeline]
+        Ensemble model pipeline.
+    greedy_ensemble_ : Optional[Pipeline]
+        Greedy ensemble model pipeline.
+    ensemble_models_ : Optional[List[Pipeline]]
+        List of models in the ensemble.
+    imbalanced_ : bool
+        Whether the data is imbalanced.
+
+    Methods
+    -------
+    fit(X: pd.DataFrame, y: pd.Series) -> Pipeline
+        Fits the model to the data.
+    predict(X: pd.DataFrame) -> np.ndarray
+        Predicts the target variable for the given data.
+    predict_proba(X: pd.DataFrame) -> np.ndarray
+        Predicts the probabilities of the target variable for the given data.
+    evaluate() -> None
+        Evaluates the fitted models.
+    save_best_model(path: str) -> None
+        Saves the best model to the specified path.
+    create_ensemble(voting: Literal["soft", "hard"] = "soft") -> Pipeline
+        Creates an ensemble of the fitted models.
+    create_greedy_ensemble(n_models: int = 6, voting: Literal["soft", "hard"] = "soft") -> Pipeline
+        Creates a greedy ensemble of the fitted models.
+    """
+
     def __init__(
         self,
         preprocess: bool = True,
@@ -45,6 +121,28 @@ class Mamut:
         random_state: Optional[int] = 42,
         **preprocessor_kwargs,
     ):
+        """
+        Constructs all the necessary attributes for the Mamut object.
+
+        Parameters
+        ----------
+        preprocess : bool
+            Whether to apply preprocessing to the data.
+        imb_threshold : float
+            Threshold for detecting imbalanced data.
+        exclude_models : Optional[List[str]]
+            List of models to exclude from selection.
+        score_metric : Literal["accuracy", "precision", "recall", "f1", "balanced_accuracy", "jaccard", "roc_auc"]
+            Metric used to evaluate model performance.
+        optimization_method : Literal["random_search", "bayes"]
+            Method for hyperparameter optimization.
+        n_iterations : Optional[int]
+            Number of iterations for optimization.
+        random_state : Optional[int]
+            Random state for reproducibility.
+        **preprocessor_kwargs
+            Additional keyword arguments for the Preprocessor.
+        """
         self.preprocess = preprocess
         self.imb_threshold = imb_threshold
         self.exclude_models = exclude_models
@@ -64,21 +162,35 @@ class Mamut:
         self.y_train = None
         self.y_test = None
 
-        # self.raw_models_: Optional[List[Union[BaseEstimator, XGBClassifier]]] = None
         self.raw_fitted_models_ = None
-        self.fitted_models_: Optional[List[Pipeline]] = None
-        self.best_model_: Optional[Pipeline] = None
+        self.fitted_models_ = None
+        self.best_model_ = None
 
         self.best_score_ = None
         self.training_summary_ = None
         self.optuna_studies_ = None
 
-        self.ensemble_: Optional[Pipeline] = None
-        self.greedy_ensemble_: Optional[Pipeline] = None
+        self.ensemble_ = None
+        self.greedy_ensemble_ = None
         self.ensemble_models_ = None
         self.imbalanced_ = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series):
+        """
+        Fits the model to the data.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            The input features.
+        y : pd.Series
+            The target variable.
+
+        Returns
+        -------
+        Pipeline
+            The best model pipeline.
+        """
         Mamut._check_categorical(y)
         if y.value_counts(normalize=True).min() < self.imb_threshold:
             self.imbalanced_ = True
@@ -130,7 +242,6 @@ class Mamut:
         ]
 
         self.best_score_ = score_for_best_model
-        # TODO: This works???
         self.best_model_ = Pipeline(
             [("preprocessor", self.preprocessor), ("model", best_model)]
         )
@@ -155,12 +266,41 @@ class Mamut:
         return self.best_model_
 
     def predict(self, X: pd.DataFrame):
+        """
+        Predicts the target variable for the given data.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            The input features.
+
+        Returns
+        -------
+        np.ndarray
+            Predicted target variable.
+        """
         return self._predict(X)
 
     def predict_proba(self, X: pd.DataFrame):
+        """
+        Predicts the probabilities of the target variable for the given data.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            The input features.
+
+        Returns
+        -------
+        np.ndarray
+            Predicted probabilities of the target variable.
+        """
         return self._predict(X, proba=True)
 
     def evaluate(self) -> None:
+        """
+        Evaluates the fitted models.
+        """
         self._check_fitted()
 
         # TODO: CHANGE, only for debug
@@ -182,11 +322,15 @@ class Mamut:
         evaluator.evaluate_to_html(self.training_summary_)
         # evaluator.plot_results()
 
-    def _prep_preprocessing_steps_list(self) -> List[str]:
-        return []
-
     def save_best_model(self, path: str) -> None:
-        # TODO: Think if necessary (all models are saved in the fitted_models dir)
+        """
+        Saves the best model to the specified path.
+
+        Parameters
+        ----------
+        path : str
+            The path to save the best model.
+        """
         self._check_fitted()
         save_path = os.path.join(
             path, f"{self.best_model_.named_steps['model'].__class__.__name__}.joblib"
@@ -195,6 +339,19 @@ class Mamut:
         log.info(f"Saved best model to {save_path}")
 
     def create_ensemble(self, voting: Literal["soft", "hard"] = "soft") -> Pipeline:
+        """
+        Creates an ensemble of the fitted models.
+
+        Parameters
+        ----------
+        voting : Literal["soft", "hard"]
+            Voting strategy for the ensemble.
+
+        Returns
+        -------
+        Pipeline
+            The ensemble model pipeline.
+        """
         self._check_fitted()
 
         ensemble = VotingClassifier(
@@ -225,6 +382,21 @@ class Mamut:
     def create_greedy_ensemble(
         self, n_models: int = 6, voting: Literal["soft", "hard"] = "soft"
     ) -> Pipeline:
+        """
+        Creates a greedy ensemble of the fitted models.
+
+        Parameters
+        ----------
+        n_models : int
+            Number of models to include in the ensemble.
+        voting : Literal["soft", "hard"]
+            Voting strategy for the ensemble.
+
+        Returns
+        -------
+        Pipeline
+            The greedy ensemble model pipeline.
+        """
         self._check_fitted()
 
         # Initialize the ensemble with the best model
@@ -280,12 +452,35 @@ class Mamut:
         return self.greedy_ensemble_
 
     def _predict(self, X: pd.DataFrame, proba: bool = False):
+        """
+        Predicts the target variable or probabilities for the given data.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            The input features.
+        proba : bool
+            Whether to predict probabilities instead of the target variable.
+
+        Returns
+        -------
+        np.ndarray
+            Predicted target variable or probabilities.
+        """
         self._check_fitted()
         if proba:
             return self.best_model_.predict_proba(X)
         return self.best_model_.predict(X)
 
     def _check_fitted(self):
+        """
+        Checks if the model has been fitted.
+
+        Raises
+        ------
+        RuntimeError
+            If the model has not been fitted.
+        """
         if not self.best_model_:
             raise RuntimeError(
                 "Can't predict because no model has been fitted. "
@@ -294,5 +489,18 @@ class Mamut:
 
     @staticmethod
     def _check_categorical(y):
+        """
+        Checks if the target variable is categorical.
+
+        Parameters
+        ----------
+        y : pd.Series
+            The target variable.
+
+        Raises
+        ------
+        ValueError
+            If the target variable is not categorical.
+        """
         if pd.api.types.is_float_dtype(y):
             raise ValueError("Target variable must be categorical.")
