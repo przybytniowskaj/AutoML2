@@ -132,20 +132,21 @@ class ModelEvaluator:
 
     report_template_path: str = os.path.join(os.path.dirname(__file__), "utils")
 
-    def __init__(self,
-                 models: dict,
-                 # X_test and y_test are preprocessed. X and y are not.
-                 X_test : np.ndarray,
-                 y_test : np.ndarray,
-                 X : pd.DataFrame,
-                 y : pd.Series,
-                 optimizer: str,
-                 n_trials: int,
-                 metric: str,
-                 studies: dict,
-                 preprocessing_steps_list: List[str] = ["SimpleImputer", "StandardScaler"],
-                 excluded_models : List[str] = None,
-                 ):
+    def __init__(
+        self,
+        models: dict,
+        # X_test and y_test are preprocessed. X and y are not.
+        X_test: np.ndarray,
+        y_test: np.ndarray,
+        X: pd.DataFrame,
+        y: pd.Series,
+        optimizer: str,
+        n_trials: int,
+        metric: str,
+        studies: dict,
+        preprocessing_steps_list: List[str] = ["SimpleImputer", "StandardScaler"],
+        excluded_models: List[str] = None,
+    ):
 
         self.models = models
         self.X = X
