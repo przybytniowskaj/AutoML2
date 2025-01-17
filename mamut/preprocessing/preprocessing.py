@@ -183,6 +183,7 @@ class Preprocessor:
             )
             self.report_["feature_selection"] = {
                 "transformer": self.sel_trans_.__class__.__name__,
+                "estimator": self.sel_trans_.estimator_.__class__.__name__,
                 "selected_features": self.selected_features_,
                 "feature_importances": self.feature_importances_,
             }
