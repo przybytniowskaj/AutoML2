@@ -176,6 +176,9 @@ class Mamut:
         evaluator.evaluate_to_html(self.training_summary_)
         # evaluator.plot_results()
 
+    def _prep_preprocessing_steps_list(self) -> List[str]:
+        return []
+
     def save_best_model(self, path: str) -> None:
         # TODO: Think if necessary (all models are saved in the fitted_models dir)
         self._check_fitted()

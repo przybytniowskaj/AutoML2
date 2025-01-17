@@ -218,5 +218,66 @@
         <img src="plots/hyperparameter_tuning_history_3.png" alt="Hyperparameter Tuning History 3" style="width: 32%;">
     </div>
 
+    { % if is_ensemble %}
+    <div class="heading">
+        <h1>Ensemble Model</h1>
+    </div>
+    <div class="section">
+        <div style="display: flex; justify-content: space-between;">
+            <div style="width: 45%;">
+                <p>
+                    Below you will see the evaluation of the ensemble model. The ensemble model was created
+                    by combining individual models using the <b>{{ ensemble_method }}</b> method.
+                    {% if ensemble_method == 'Stacking' %} The meta-learner used was <b>RandomForestClassifier</b>. {% endif %}
+                    The models for the ensemble were selected using greedy approach with respect to the metric: <b>{{ metric }}</b>.
+                    The best ensemble model was selected.
+                </p>
+            </div>
+            <div style="width: 45%;">
+                <ul>
+                    {% for estimator in base_estimators %}
+                        <li>{{ estimator }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="section">
+        {{ ensemble_summary | safe }}
+    </div>
+    {% endif %}
+
+    <div class="heading">
+        <h1>Interpretability</h1>
+    </div>
+    <div class="heading2">
+        <h2>Feature Importance</h2>
+    </div>
+    <div class="section">
+        <p>
+            Below you will see the feature importance for the best model. Feature importance is calculated
+            using the <b>{{ feature_importance_method }}</b> method. The method used to calculate feature importance
+            is based on the model type. For example, tree-based models use the Gini importance, while linear models
+            use the coefficients. The feature importance is calculated using the <b>training set</b> and is used to
+            determine the most important features for the model.
+        </p>
+        <img src="plots/feature_importance.png" alt="Feature Importance">
+    </div>
+
+    <div class="heading2">
+        <h2>Partial Dependence Plots ??</h2>
+    </div>
+
+    <div class="heading2">
+        <h2>SHAP Values</h2>
+    </div>
+    <div class="section">
+        <p>
+            Below you will see the SHAP values for the best model. SHAP values provide a way to interpret the impact of each feature on the model's output.
+            The SHAP values are calculated using the <b>test set</b> and are used to explain the predictions of the model.
+        </p>
+        <img src="plots/shap_values.png" alt="SHAP Values">
+    </div>
+
 </body>
 </html>

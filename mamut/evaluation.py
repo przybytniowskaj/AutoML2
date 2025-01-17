@@ -145,6 +145,7 @@ class ModelEvaluator:
                  n_trials: int,
                  metric: str,
                  studies: dict,
+                 preprocessing_steps_list: List[str] = ["SimpleImputer", "StandardScaler"],
                  excluded_models : List[str] = None,
                  ):
 
@@ -157,6 +158,7 @@ class ModelEvaluator:
         self.n_trials = n_trials
         self.metric = metric
         self.studies = studies
+        self.preprocessing_steps_list = preprocessing_steps_list
         self.excluded_models = excluded_models if excluded_models else []
 
         self.report_output_path = os.path.join(os.getcwd(), "mamut_report")
@@ -384,7 +386,7 @@ class ModelEvaluator:
             class_distribution=class_distribution.to_html(index=False),
             # TODO: Get preprocessing steps from Preprocessor
             preprocessing_list=_generate_preprocessing_steps_list(
-                ["SimpleImputer", "StandardScaler"]
+                self.preprocessing_steps_list
             ),
         )
 
