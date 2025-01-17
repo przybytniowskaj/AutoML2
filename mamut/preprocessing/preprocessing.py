@@ -73,10 +73,18 @@ class Preprocessor:
         self.has_numeric_ = None
         self.has_categorical_ = None
         self.ohe_feature_names_ = None
+        self.report_ = None
+        self.n_missing_numeric = None
+        self.n_missing_categorical = None
+        self.lambdas_ = None
+        self.feature_importances_ = None
 
     def fit_transform(
         self, X: pd.DataFrame, y: pd.Series
     ) -> (np.ndarray, np.ndarray, Pipeline):
+
+        self.report_ = dict()
+
         if not self.numeric_features:
             self.numeric_features = X.select_dtypes(include="number").columns.tolist()
         if not self.categorical_features:
@@ -84,22 +92,31 @@ class Preprocessor:
                 exclude="number"
             ).columns.tolist()
 
+        self.report_["features"] = {
+            "numeric": self.numeric_features,
+            "categorical": self.categorical_features,
+        }
+
         if y.value_counts(normalize=True).min() < self.imbalance_threshold:
             self.imbalanced_ = True
         X, y = X.copy(), y.copy()
-        # TODO: EXPERIMENT AND TEST DIFFERENT PREPROCESSING CONFIGURATIONS
+
         self.has_numeric_ = len(self.numeric_features) > 0
         self.has_categorical_ = len(self.categorical_features) > 0
 
         if self.has_numeric_:
-            if X[self.numeric_features].isnull().sum().sum() > 0:
+            self.n_missing_numeric = X[self.numeric_features].isnull().sum().sum()
+            if self.n_missing_numeric > 0:
                 self.missing_numeric_ = True
                 X, self.missing_num_trans_ = handle_missing_numeric(
                     X, self.numeric_features, self.num_imputation
                 )
 
         if self.has_categorical_:
-            if X[self.categorical_features].isnull().sum().sum() > 0:
+            self.n_missing_categorical = (
+                X[self.categorical_features].isnull().sum().sum()
+            )
+            if self.n_missing_categorical > 0:
                 self.missing_categorical_ = True
                 X, self.missing_cat_trans_ = handle_missing_categorical(
                     X, self.categorical_features, self.cat_imputation
@@ -107,36 +124,92 @@ class Preprocessor:
 
         self.missing_ = self.missing_numeric_ or self.missing_categorical_
 
+        if self.missing_:
+            self.report_["imputation"] = {}
+            if self.missing_numeric_:
+                self.report_["imputation"]["numeric"] = {
+                    "transformer": self.missing_num_trans_.__class__.__name__,
+                    "n_missing_numeric": self.n_missing_numeric,
+                }
+            if self.missing_categorical_:
+                self.report_["imputation"]["categorical"] = {
+                    "transformer": self.missing_cat_trans_.__class__.__name__,
+                    "n_missing_categorical": self.n_missing_categorical,
+                }
+
+        n_row_before = X.shape[0]
         X, y, self.outlier_trans_ = handle_outliers(
             X, y, self.numeric_features, random_state=self.random_state
         )
+        n_row_after = X.shape[0]
+        self.report_["removing_outliers"] = {
+            "transformer": self.outlier_trans_.__class__.__name__,
+            "n_outliers_removed": n_row_before - n_row_after,
+        }
 
         if self.has_categorical_:
             X, self.cat_trans_, self.ohe_feature_names_ = handle_categorical(
                 X, self.categorical_features
             )
+            self.report_["category_encoding"] = {
+                "transformer": self.cat_trans_.__class__.__name__,
+                "encoded_feature_names": self.ohe_feature_names_,
+            }
 
-        # TODO: zbadac wlyw powertransformera, dostosowac skew treshold
-        X, self.skew_trans_, self.skewed_feature_names_ = handle_skewed(
+        X, self.skew_trans_, self.skewed_feature_names_, self.lambdas_ = handle_skewed(
             X, self.numeric_features, threshold=self.skew_threshold
         )
+        self.report_["skew_transform"] = {
+            "transformer": self.skew_trans_.__class__.__name__,
+            "method": self.skew_trans_.method,
+            "skewed_feature_names": self.skewed_feature_names_,
+            "lambdas": self.lambdas_,
+        }
+
         if self.has_numeric_:
             X, self.scaler_ = handle_scaling(X, self.numeric_features, self.scaling)
+            self.report_["scaling"] = {
+                "transformer": self.scaler_.__class__.__name__,
+            }
 
         if self.feature_selection:
-            X, self.sel_trans_, self.selected_features_ = handle_selection(
-                X, y, threshold=self.selection_threshold, random_state=self.random_state
+            X, self.sel_trans_, self.selected_features_, self.feature_importances_ = (
+                handle_selection(
+                    X,
+                    y,
+                    threshold=self.selection_threshold,
+                    random_state=self.random_state,
+                )
             )
+            self.report_["feature_selection"] = {
+                "transformer": self.sel_trans_.__class__.__name__,
+                "selected_features": self.selected_features_,
+                "feature_importances": self.feature_importances_,
+            }
 
         if self.pca:
+            n_features_before = X.shape[1]
             X, self.ext_trans_, self.pca_loadings_ = handle_extraction(
                 X, threshold=self.pca_threshold, random_state=self.random_state
             )
+            n_features_after = X.shape[1]
+            self.report_["feature_extraction"] = {
+                "transformer": self.ext_trans_.__class__.__name__,
+                "pca_loadings": self.pca_loadings_,
+                "n_features_before": n_features_before,
+                "n_features_after": n_features_after,
+            }
 
         if self.imbalanced_resampling and self.imbalanced_:
+            n_row_before = X.shape[0]
             X, y, self.imbalanced_trans_ = handle_imbalanced(
                 X, y, self.resampling_strategy, random_state=self.random_state
             )
+            n_row_after = X.shape[0]
+            self.report_["imbalanced_resampling"] = {
+                "transformer": self.imbalanced_trans_.__class__.__name__,
+                "n_resampled": n_row_after - n_row_before,
+            }
 
         self.skewed_ = len(self.skewed_feature_names_) > 0
         self.fitted = True
@@ -150,8 +223,7 @@ class Preprocessor:
         return X, y
 
     def transform(self, X: pd.DataFrame) -> np.ndarray:
-        if not self.fitted:
-            raise RuntimeError("Preprocessor has not been fitted.")
+        self._check_fitted()
         if not isinstance(X, pd.DataFrame):
             raise ValueError("Input data must be a pandas DataFrame.")
         X = X.copy()
@@ -193,3 +265,11 @@ class Preprocessor:
             X = X.values
 
         return X
+
+    def report(self):
+        self._check_fitted()
+        return self.report_
+
+    def _check_fitted(self):
+        if not self.fitted:
+            raise RuntimeError("Preprocessor has not been fitted.")
