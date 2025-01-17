@@ -83,7 +83,7 @@ class Preprocessor:
 
         if y.value_counts(normalize=True).min() < self.imbalance_threshold:
             self.imbalanced_ = True
-
+        X, y = X.copy(), y.copy()
         # TODO: EXPERIMENT AND TEST DIFFERENT PREPROCESSING CONFIGURATIONS
         self.has_numeric_ = len(self.numeric_features) > 0
         self.has_categorical_ = len(self.categorical_features) > 0
@@ -151,7 +151,7 @@ class Preprocessor:
             raise RuntimeError("Preprocessor has not been fitted.")
         if not isinstance(X, pd.DataFrame):
             raise ValueError("Input data must be a pandas DataFrame.")
-
+        X = X.copy()
         if self.missing_numeric_:
             X[self.numeric_features] = self.missing_num_trans_.transform(
                 X[self.numeric_features]

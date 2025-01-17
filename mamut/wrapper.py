@@ -66,8 +66,8 @@ class Mamut:
 
         # self.raw_models_: Optional[List[Union[BaseEstimator, XGBClassifier]]] = None
         self.raw_fitted_models_ = None
-        self.fitted_models_ : Optional[List[Pipeline]] = None
-        self.best_model_ : Optional[Pipeline] = None
+        self.fitted_models_: Optional[List[Pipeline]] = None
+        self.best_model_: Optional[Pipeline] = None
 
         self.best_score_ = None
         self.training_summary_ = None
@@ -166,12 +166,18 @@ class Mamut:
         # TODO: CHANGE, only for debug
         m = KNeighborsClassifier(n_neighbors=5)
         m.fit(self.X_train, self.y_train)
-        evaluator = ModelEvaluator(self.raw_fitted_models_, X_test=self.X_test, y_test=self.y_test,
-                                   X=self.X, y=self.y, optimizer=self.optimization_method,
-                                   metric=self.score_metric.__name__, n_trials=self.n_iterations,
-                                   excluded_models=self.exclude_models, studies=self.optuna_studies_,
-                                   )
-
+        evaluator = ModelEvaluator(
+            self.raw_fitted_models_,
+            X_test=self.X_test,
+            y_test=self.y_test,
+            X=self.X,
+            y=self.y,
+            optimizer=self.optimization_method,
+            metric=self.score_metric.__name__,
+            n_trials=self.n_iterations,
+            excluded_models=self.exclude_models,
+            studies=self.optuna_studies_,
+        )
 
         evaluator.evaluate_to_html(self.training_summary_)
         # evaluator.plot_results()
