@@ -4,15 +4,18 @@ import platform
 import time
 from datetime import datetime
 from typing import Callable, List
+from itertools import cycle
 
 import matplotlib.pyplot as plt
 import numpy as np
 import optuna
 import pandas as pd
 import psutil
+import shap
 import seaborn as sns
 from jinja2 import Environment, FileSystemLoader
 from matplotlib import gridspec
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -24,6 +27,10 @@ from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
 )
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.preprocessing import label_binarize
+from sklearn.metrics import roc_curve, auc
+
 
 from mamut.preprocessing.handlers import handle_outliers
 from mamut.utils.utils import model_param_dict, preprocessing_steps
@@ -137,12 +144,17 @@ class ModelEvaluator:
                  # X_test and y_test are preprocessed. X and y are not.
                  X_test : np.ndarray,
                  y_test : np.ndarray,
+                 X_train: np.ndarray,
+                 y_train: np.ndarray,
                  X : pd.DataFrame,
                  y : pd.Series,
                  optimizer: str,
                  n_trials: int,
                  metric: str,
                  studies: dict,
+                 training_summary: pd.DataFrame,
+                 pca_loadings,
+                 binary: bool,
                  preprocessing_steps_list: List[str] = ["SimpleImputer", "StandardScaler"],
                  excluded_models : List[str] = None,
                  ):
@@ -152,10 +164,21 @@ class ModelEvaluator:
         self.y = y
         self.X_test = X_test
         self.y_test = y_test
+        self.X_train = X_train
+        self.y_train = y_train
         self.optimizer = optimizer
         self.n_trials = n_trials
         self.metric = metric
         self.studies = studies
+        self.training_summary = training_summary
+        self.pca_loadings = pca_loadings
+        self.binary = binary
+        if self.pca_loadings is not None:
+            self.pca = True
+        else:
+            self.pca = False
+        if self.training_summary is None:
+            raise ValueError("You need to .fit() your models before evaluating them with .evaluate()")
         self.preprocessing_steps_list = preprocessing_steps_list
         self.excluded_models = excluded_models if excluded_models else []
 
@@ -165,7 +188,10 @@ class ModelEvaluator:
         # Create the report directory it doesn't exist:
         os.makedirs(self.report_output_path, exist_ok=True)
         os.makedirs(self.plot_output_path, exist_ok=True)
+        self._set_plt_style()
 
+
+    def _set_plt_style(self) -> None:
         sns.set_context("notebook", font_scale=1.1)
         plt.style.use("fivethirtyeight")
         # Set background color of all plots to #f0f8ff;
@@ -175,15 +201,14 @@ class ModelEvaluator:
         plt.rcParams["axes.edgecolor"] = "#007bb5"
         plt.rcParams["figure.edgecolor"] = "#007bb5"
 
+
     def evaluate(self, training_summary: pd.DataFrame):
         return self.evaluate_to_html(training_summary)
 
-    def plot_results(self):
-        if not hasattr(self, "results_df"):
-            raise ValueError("You need to run evaluate() before plotting results.")
-        self._plot_roc_auc_curve()
-        self.plot_all_confusion_matrices()
-
+    def plot_results_in_notebook(self):
+        self._plot_roc_auc_curve(show=True, save=False, training_summary=self.training_summary)
+        self._plot_confusion_matrices(show=True, save=False, training_summary=self.training_summary)
+        self._plot_hyperparameter_tuning_history(show=True, save=False, training_summary=self.training_summary)
         return
 
     def _plot_roc_auc_curve(
@@ -217,6 +242,7 @@ class ModelEvaluator:
                 format="png",
                 bbox_inches="tight",
             )
+        plt.close()
 
         return
 
@@ -247,6 +273,49 @@ class ModelEvaluator:
         # plt.title('Receiver Operating Characteristic (ROC) Curve')
         # plt.legend(loc="lower right")
         # plt.show()
+
+
+    def _plot_roc_auc_curve_multiclass(self, training_summary: pd.DataFrame, show: bool = False,
+                                       save: bool = True) -> None:
+        plt.figure(figsize=(10, 8))
+        top_3_models = training_summary["Model"].head(3).to_numpy()
+        y_test_bin = label_binarize(self.y_test, classes=np.unique(self.y_test))
+        n_classes = y_test_bin.shape[1]
+
+        for model_name in top_3_models:
+            model = next(
+                m for m in self.models.values() if m.__class__.__name__ == model_name
+            )
+            classifier = OneVsRestClassifier(model)
+            y_score = classifier.fit(self.X_train, self.y_train).predict_proba(self.X_test)
+
+            # Compute micro-average ROC curve and ROC area
+            fpr, tpr, _ = roc_curve(y_test_bin.ravel(), y_score.ravel())
+            roc_auc = auc(fpr, tpr)
+
+            plt.plot(fpr, tpr, lw=2, label=f'Micro-averaged {model_name} (area = {roc_auc:0.2f})')
+
+        plt.plot([0, 1], [0, 1], "k--", lw=2)
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel("False Positive Rate", fontsize=14)
+        plt.ylabel("True Positive Rate", fontsize=14)
+        plt.title("Micro-Averaged ROC Curve (One-vs-Rest)", fontsize=14)
+        plt.legend(loc="lower right", fontsize=12)
+        plt.tight_layout()
+
+        if show:
+            plt.show()
+        if save:
+            plt.savefig(
+                os.path.join(self.plot_output_path, "roc_auc_curve.png"),
+                format="png",
+                bbox_inches="tight",
+            )
+        plt.close()
+
+        return
+
 
     def _plot_confusion_matrices(
         self, training_summary: pd.DataFrame, show: bool = False, save: bool = True
@@ -283,12 +352,14 @@ class ModelEvaluator:
                 format="png",
                 bbox_inches="tight",
             )
+        plt.close()
 
         return
 
     def _plot_hyperparameter_tuning_history(
         self, training_summary: pd.DataFrame, show: bool = False, save: bool = True
     ) -> None:
+        self._set_plt_style()
         top_3_models = training_summary["Model"].head(3).to_numpy()
 
         for i, model_name in enumerate(top_3_models):
@@ -322,6 +393,151 @@ class ModelEvaluator:
                 plt.close()
 
         return
+
+
+    def _plot_feature_importances(self, show: bool = False, save: bool = True) -> None:
+        self._set_plt_style()
+        # Train a Random Forest model
+        rf = RandomForestClassifier(random_state=42)
+        rf.fit(self.X_train, self.y_train)
+
+        # Get feature importances
+        importances = rf.feature_importances_
+        indices = np.argsort(importances)[::-1]
+
+        # Limit to top 10 features if there are more than 10
+        if len(indices) > 10:
+            indices = indices[:10]
+
+        # Plot the feature importances
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(len(indices)), importances[indices], align="center")
+        plt.xticks(range(len(indices)), self.X.columns[indices], rotation=90)
+        plt.xlabel("Feature", fontsize=12)
+        plt.ylabel("Importance", fontsize=12)
+        plt.tight_layout()
+
+        if show:
+            plt.show()
+        if save:
+            plt.savefig(
+                os.path.join(self.plot_output_path, "feature_importance.png"),
+                format="png",
+                bbox_inches="tight",
+            )
+        plt.close()
+
+        return
+
+
+    def _plot_shap_beeswarm(self, model, show: bool = False, save: bool = True) -> None:
+        # Calculate SHAP values
+        explainer = shap.Explainer(model, self.X_train)
+        shap_values = explainer(self.X_train)
+
+        # Create SHAP beeswarm plot
+        plt.figure(figsize=(10, 6))
+        shap.plots.beeswarm(shap_values, max_display=10, show=False)
+        plt.title("SHAP Beeswarm Plot", fontsize=14)
+        plt.tight_layout()
+
+        if show:
+            plt.show()
+        if save:
+            plt.savefig(
+                os.path.join(self.plot_output_path, "shap_values.png"),
+                format="png",
+                bbox_inches="tight",
+            )
+        plt.close()
+
+        return
+
+    def _plot_shap_beeswarm_multiclass(self, model, show: bool = False, save: bool = True) -> None:
+        # Calculate SHAP values
+        explainer = shap.Explainer(model, self.X_train)
+        shap_values = explainer(self.X_train)
+        # Create SHAP beeswarm plot only for the first class (0)
+        plt.figure(figsize=(10, 6))
+        shap.plots.beeswarm(shap_values[:, :, 0], show=False)
+        plt.title("SHAP Beeswarm Plot For Class 0", fontsize=14)
+        plt.tight_layout()
+
+        if show:
+            plt.show()
+        if save:
+            plt.savefig(
+                os.path.join(self.plot_output_path, "shap_values.png"),
+                format="png",
+                bbox_inches="tight",
+            )
+        plt.close()
+        return
+
+
+    def _plot_pca_loadings(self, show: bool = False, save: bool = True) -> None:
+        if self.pca_loadings is None:
+            raise ValueError("PCA loadings are not available. "
+                             "Potentially PCA was not used in the preprocessing steps."
+                             "Use Mamut(pca=True) to include PCA in the preprocessing steps.")
+
+        self._set_plt_style()
+        sns.set_palette(sns.color_palette("tab20", 20))
+
+        plt.figure(figsize=(12, 8))
+        sns.heatmap(self.pca_loadings, annot=False, cmap="coolwarm", xticklabels=self.X.columns,
+                    yticklabels=[f'PC{i + 1}' for i in range(self.pca_loadings.shape[0])])
+        plt.xlabel('Features', fontsize=12)
+        plt.ylabel('Principal Components', fontsize=12)
+        plt.tight_layout()
+
+        if show:
+            plt.show()
+        if save:
+            plt.savefig(
+                os.path.join(self.plot_output_path, "pca_loadings_heatmap.png"),
+                format="png",
+                bbox_inches="tight",
+            )
+        plt.close()
+
+        return
+
+
+    def _plot_pca_loadings2(self, show: bool = False, save: bool = True) -> None:
+        if self.pca_loadings is None:
+            raise ValueError("PCA loadings are not available. "
+                             "Potentially PCA was not used in the preprocessing steps."
+                             "Use Mamut(pca=True) to include PCA in the preprocessing steps.")
+        self._set_plt_style()
+        sns.set_palette(sns.color_palette("tab20", 20))
+        n_components = self.pca_loadings.shape[0]
+        n_features = self.pca_loadings.shape[1]
+
+        plt.figure(figsize=(10, 6))
+        for i in range(n_components):
+            plt.bar(np.arange(n_features) + i / n_components, self.pca_loadings[i],
+                    width=1 / n_components, label=f'PC{i + 1}')
+
+        plt.xlabel('Features', fontsize=12)
+        plt.ylabel('Loadings', fontsize=12)
+        plt.title('PCA Loadings', fontsize=14)
+        plt.xticks(np.arange(n_features), self.X.columns, rotation=90)
+        plt.legend(loc='best')
+        plt.tight_layout()
+
+        if show:
+            plt.show()
+        if save:
+            plt.savefig(
+                os.path.join(self.plot_output_path, "pca_loadings.png"),
+                format="png",
+                bbox_inches="tight",
+            )
+        plt.close()
+
+        return
+
 
     def evaluate_to_html(
         self,
@@ -374,9 +590,24 @@ class ModelEvaluator:
         )
 
         # Create and save roc_auc_curve as .png file:
-        self._plot_roc_auc_curve(training_summary)
+        if self.binary:
+            self._plot_roc_auc_curve(training_summary)
+        else:
+            self._plot_roc_auc_curve_multiclass(training_summary)
+
         self._plot_confusion_matrices(training_summary)
         self._plot_hyperparameter_tuning_history(training_summary)
+        self._plot_feature_importances()
+        best_model_name = training_summary.iloc[0]["Model"]
+        best_model = self.models[best_model_name]
+
+        if self.binary:
+            self._plot_shap_beeswarm(best_model)
+        else:
+            self._plot_shap_beeswarm_multiclass(best_model)
+
+        if self.pca:
+            self._plot_pca_loadings()
 
         # Load the Jinja2 template placed in report_template_path:
         env = Environment(loader=FileSystemLoader(self.report_template_path))
@@ -402,6 +633,9 @@ class ModelEvaluator:
             basic_dataset_info=dataset_basic_list,
             feature_summary=feature_summary.to_html(index=False),
             class_distribution=class_distribution.to_html(index=False),
+            feature_importance_method="Random Forest Importances",
+            pca=self.pca,
+            binary=self.binary,
             # TODO: Get preprocessing steps from Preprocessor
             preprocessing_list=_generate_preprocessing_steps_list(
                 self.preprocessing_steps_list

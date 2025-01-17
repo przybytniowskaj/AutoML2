@@ -5,8 +5,10 @@ from typing import List, Literal, Optional
 
 import joblib
 import pandas as pd
+import numpy as np
 from sklearn.base import clone
-from sklearn.ensemble import VotingClassifier
+from sklearn.ensemble import VotingClassifier, StackingClassifier, RandomForestClassifier
+from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
@@ -170,6 +172,8 @@ class Mamut:
             self.raw_fitted_models_,
             X_test=self.X_test,
             y_test=self.y_test,
+            X_train = self.X_train,
+            y_train = self.y_train,
             X=self.X,
             y=self.y,
             optimizer=self.optimization_method,
@@ -177,6 +181,9 @@ class Mamut:
             n_trials=self.n_iterations,
             excluded_models=self.exclude_models,
             studies=self.optuna_studies_,
+            training_summary=self.training_summary_,
+            pca_loadings=self.preprocessor.pca_loadings_,
+            binary=self.model_selector.binary,
         )
 
         evaluator.evaluate_to_html(self.training_summary_)
@@ -278,6 +285,117 @@ class Mamut:
         )
 
         return self.greedy_ensemble_
+
+
+    def create_greedy_ensemble2(self, max_models=6):
+        self._check_fitted()
+
+        if max_models > len(self.raw_fitted_models_):
+            max_models = len(self.raw_fitted_models_)
+            log.info(
+                f"Max models set to {max_models} as there are only {len(self.raw_fitted_models_)} models available"
+                f"in the bag-of-models used in this experiment.")
+
+        # Sort models by their performance
+        sorted_models = sorted(
+            self.raw_fitted_models_.items(),
+            key=lambda item: self.score_metric(self.y_test, item[1].predict(self.X_test)),
+            reverse=True
+        )
+
+        # Start with the best and second best models
+        ensemble_models = [sorted_models[0], sorted_models[1]]
+        best_score = self.score_metric(self.y_test,
+                                       self._create_stacking_classifier(ensemble_models).predict(self.X_test))
+
+        # Greedily add models to the ensemble
+        for model in sorted_models[2:max_models]:
+            candidate_ensemble = ensemble_models + [model]
+            candidate_stacking_clf = self._create_stacking_classifier(candidate_ensemble)
+            candidate_stacking_clf.fit(self.X_train, self.y_train)
+            score = self.score_metric(self.y_test, candidate_stacking_clf.predict(self.X_test))
+
+            if score > best_score:
+                best_score = score
+                ensemble_models.append(model)
+
+        # Create the final stacking classifier
+        final_stacking_clf = self._create_stacking_classifier(ensemble_models)
+        final_stacking_clf.fit(self.X_train, self.y_train)
+        self.ensemble_ = final_stacking_clf
+
+        log.info(f"Created greedy ensemble with {len(ensemble_models)} models. Best score: {best_score:.4f}")
+        return self.ensemble_
+
+
+    def _create_stacking_classifier(self, models):
+        estimators = [(name, clone(model)) for name, model in models]
+        return StackingClassifier(estimators=estimators, final_estimator=RandomForestClassifier())
+
+
+    def _calculate_disagreement(self, model1, model2, X_test):
+        """Calculate disagreement between two models' predictions."""
+        pred1 = model1.predict(X_test)
+        pred2 = model2.predict(X_test)
+        return np.mean(pred1 != pred2)
+
+    def _ensemble_selection(self, max_ensemble_size=5, voting: Literal["soft", "hard"] = "soft"):
+        """Greedy algorithm to select the best subset of models for ensemble."""
+        #  TODO: THIS IS WORK IN PROGRESS... DO NOT USE
+        models = [(model.__class__.__name__, model) for model in self.raw_fitted_models_.values()]
+        print(models)
+        selected_models = []
+        remaining_models = models.copy()
+        best_score = 0
+        ensemble_performance = []
+
+        # Initialize with the best performing model on test set
+        scores = {name: self.score_metric(self.y_test, model.predict(self.X_test)) for name, model in models}
+        print("Scores:", scores)
+        best_model_name, best_model = max(scores.items(), key=lambda item: item[1])
+        print("Best model:", best_model_name, "with score:", best_model)
+        selected_models.append((best_model_name, best_model))
+        remaining_models.remove((best_model_name, best_model))
+        best_score = scores[best_model_name]
+        ensemble_performance.append(best_score)
+
+        print(f"Starting with best model: {best_model_name} with score: {best_score}")
+
+        # Greedily add models based on performance and diversity
+        while len(selected_models) < max_ensemble_size and remaining_models:
+            best_model_to_add = None
+            best_new_score = best_score
+            for name, model in remaining_models:
+                # Test current ensemble with this model added
+                current_ensemble = VotingClassifier(estimators=selected_models + [(name, model)], voting=voting)
+                current_ensemble.fit(self.X_train, self.y_train)
+                ensemble_score = self.score_metric(self.y_test, current_ensemble.predict(self.X_test))
+
+                # Compute diversity with selected models
+                diversity = np.mean([self._calculate_disagreement(model, selected_model[1], self.X_test)
+                                     for selected_model in selected_models])
+
+                # Score considering both accuracy improvement and diversity
+                weighted_score = ensemble_score + 0.1 * diversity  # 0.1 is a diversity weight factor
+                if weighted_score > best_new_score:
+                    best_model_to_add = (name, model)
+                    best_new_score = weighted_score
+
+            if best_model_to_add:
+                selected_models.append(best_model_to_add)
+                remaining_models.remove(best_model_to_add)
+                best_score = best_new_score
+                ensemble_performance.append(best_new_score)
+                print(f"Added {best_model_to_add[0]} to ensemble, new weighted score: {best_new_score}")
+            else:
+                break  # No improvement
+
+        # Final ensemble
+        final_ensemble = VotingClassifier(estimators=selected_models, voting=voting)
+        final_ensemble.fit(self.X_train, self.y_train)
+        return final_ensemble, ensemble_performance
+
+
 
     def _predict(self, X: pd.DataFrame, proba: bool = False):
         self._check_fitted()
