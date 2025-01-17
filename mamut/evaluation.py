@@ -139,6 +139,7 @@ class ModelEvaluator:
 
     report_template_path: str = os.path.join(os.path.dirname(__file__), "utils")
 
+
     def __init__(self,
                  models: dict,
                  # X_test and y_test are preprocessed. X and y are not.
