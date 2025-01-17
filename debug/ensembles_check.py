@@ -17,7 +17,7 @@ if __name__ == "__main__":
     print("Loaded")
 
     mamut = Mamut(
-        n_iterations=2,
+        n_iterations=1,
         exclude_models=["SVC", "RandomForestClassifier"],
         pca=False,
     )
@@ -26,7 +26,13 @@ if __name__ == "__main__":
     mamut.fit(X_train, y_train)
     print("Fitted")
 
-    mamut.evaluate()
+    # mamut.evaluate()
+
+    # ensemble = mamut.create_greedy_ensemble2()
+
+    # print(ensemble)
+    # print(accuracy_score(y_test, ensemble.predict(pd.DataFrame(X_test))))
+
 
 
     # best_model = mamut.best_model_

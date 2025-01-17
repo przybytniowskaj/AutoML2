@@ -305,9 +305,6 @@ class Mamut:
         """
         self._check_fitted()
 
-        # TODO: CHANGE, only for debug
-        m = KNeighborsClassifier(n_neighbors=5)
-        m.fit(self.X_train, self.y_train)
         evaluator = ModelEvaluator(
             self.raw_fitted_models_,
             X_test=self.X_test,
@@ -324,10 +321,11 @@ class Mamut:
             training_summary=self.training_summary_,
             pca_loadings=self.preprocessor.pca_loadings_,
             binary=self.model_selector.binary,
+            preprocessing_steps=self.preprocessor.report(),
         )
 
         evaluator.evaluate_to_html(self.training_summary_)
-        # evaluator.plot_results()
+        evaluator.plot_results_in_notebook()
 
     def save_best_model(self, path: str) -> None:
         """
@@ -471,7 +469,8 @@ class Mamut:
         # Sort models by their performance
         sorted_models = sorted(
             self.raw_fitted_models_.items(),
-            key=lambda item: self.score_metric(self.y_test, item[1].predict(self.X_test)),
+            key=lambda item: self.training_summary_.loc[
+                self.training_summary_["model"] == item[0], self.score_metric.__name__],
             reverse=True
         )
 
@@ -497,6 +496,7 @@ class Mamut:
         self.ensemble_ = final_stacking_clf
 
         log.info(f"Created greedy ensemble with {len(ensemble_models)} models. Best score: {best_score:.4f}")
+        # TODO: Return a pipeline
         return self.ensemble_
 
 
@@ -506,6 +506,7 @@ class Mamut:
 
 
     def _calculate_disagreement(self, model1, model2, X_test):
+        #  TODO: THIS IS WORK IN PROGRESS... DO NOT USE
         """Calculate disagreement between two models' predictions."""
         pred1 = model1.predict(X_test)
         pred2 = model2.predict(X_test)
@@ -566,7 +567,6 @@ class Mamut:
         final_ensemble = VotingClassifier(estimators=selected_models, voting=voting)
         final_ensemble.fit(self.X_train, self.y_train)
         return final_ensemble, ensemble_performance
-
 
 
     def _predict(self, X: pd.DataFrame, proba: bool = False):

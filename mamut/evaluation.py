@@ -101,7 +101,7 @@ def _generate_dataset_overview(
     return dataset_basic_list, feature_summary, class_distribution
 
 
-def _generate_preprocessing_steps_list(steps: List[str]) -> str:
+def _generate_preprocessing_steps_list(steps) -> str:
     # Initialize a dictionary to hold categorized steps
     categorized_steps = {}
 
@@ -125,6 +125,38 @@ def _generate_preprocessing_steps_list(steps: List[str]) -> str:
 
     return html_prep_list
 
+def _generate_preprocessing_steps_html(report):
+    """
+    Generates an HTML list of preprocessing steps based on the report dictionary.
+
+    Parameters
+    ----------
+    report : dict
+        The report dictionary containing preprocessing steps.
+
+    Returns
+    -------
+    str
+        An HTML string representing the preprocessing steps.
+    """
+    html_list = ""
+
+    for category, steps in report.items():
+        html_list += f"<li><strong>{category.capitalize()}</strong><ul>"
+        if isinstance(steps, dict):
+            for step, details in steps.items():
+                if isinstance(details, dict):
+                    html_list += f"<li><strong>{step.capitalize()}</strong><ul>"
+                    for sub_step, description in details.items():
+                        html_list += f"<li>{sub_step}: {description}</li>"
+                    html_list += "</ul></li>"
+                else:
+                    html_list += f"<li>{step}: {details}</li>"
+        else:
+            html_list += f"<li>{steps}</li>"
+        html_list += "</ul></li>"
+
+    return html_list
 
 def _generate_models_list(excluded_models: List[str]) -> List[str]:
     # Get all available models
@@ -156,7 +188,7 @@ class ModelEvaluator:
                  training_summary: pd.DataFrame,
                  pca_loadings,
                  binary: bool,
-                 preprocessing_steps_list: List[str] = ["SimpleImputer", "StandardScaler"],
+                 preprocessing_steps,
                  excluded_models : List[str] = None,
                  ):
 
@@ -180,7 +212,7 @@ class ModelEvaluator:
             self.pca = False
         if self.training_summary is None:
             raise ValueError("You need to .fit() your models before evaluating them with .evaluate()")
-        self.preprocessing_steps_list = preprocessing_steps_list
+        self.preprocessing_steps = preprocessing_steps
         self.excluded_models = excluded_models if excluded_models else []
 
         self.report_output_path = os.path.join(os.getcwd(), "mamut_report")
@@ -207,7 +239,10 @@ class ModelEvaluator:
         return self.evaluate_to_html(training_summary)
 
     def plot_results_in_notebook(self):
-        self._plot_roc_auc_curve(show=True, save=False, training_summary=self.training_summary)
+        if self.binary:
+            self._plot_roc_auc_curve(training_summary=self.training_summary, show=True, save=False)
+        else:
+            self._plot_roc_auc_curve_multiclass(training_summary=self.training_summary, show=True, save=False)
         self._plot_confusion_matrices(show=True, save=False, training_summary=self.training_summary)
         self._plot_hyperparameter_tuning_history(show=True, save=False, training_summary=self.training_summary)
         return
@@ -235,45 +270,18 @@ class ModelEvaluator:
         plt.legend(loc="lower right", fontsize=12)
         plt.tight_layout()
 
-        if show:
-            plt.show()
         if save:
             plt.savefig(
                 os.path.join(self.plot_output_path, "roc_auc_curve.png"),
                 format="png",
                 bbox_inches="tight",
             )
+        if show:
+            plt.show()
+
         plt.close()
 
         return
-
-        # y_test_bin = label_binarize(self.y_test, classes=list(set(self.y_test)))
-        # n_classes = y_test_bin.shape[1]
-
-        # plt.figure(figsize=(10, 8))
-
-        # for model in self.models:
-        #     y_score = model.predict(self.X_test)
-        #     fpr = dict()
-        #     tpr = dict()
-        #     roc_auc = dict()
-        #     for i in range(n_classes):
-        #         fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
-        #         roc_auc[i] = auc(fpr[i], tpr[i])
-
-        #     colors = cycle(['aqua', 'darkorange', 'cornflowerblue'])
-        #     for i, color in zip(range(n_classes), colors):
-        #         plt.plot(fpr[i], tpr[i], color=color, lw=2,
-        #             label=f'ROC curve of class {i} for {model.__class__.__name__} (area = {roc_auc[i]:0.2f})')
-
-        # plt.plot([0, 1], [0, 1], 'k--', lw=2)
-        # plt.xlim([0.0, 1.0])
-        # plt.ylim([0.0, 1.05])
-        # plt.xlabel('False Positive Rate')
-        # plt.ylabel('True Positive Rate')
-        # plt.title('Receiver Operating Characteristic (ROC) Curve')
-        # plt.legend(loc="lower right")
-        # plt.show()
 
 
     def _plot_roc_auc_curve_multiclass(self, training_summary: pd.DataFrame, show: bool = False,
@@ -305,14 +313,15 @@ class ModelEvaluator:
         plt.legend(loc="lower right", fontsize=12)
         plt.tight_layout()
 
-        if show:
-            plt.show()
         if save:
             plt.savefig(
                 os.path.join(self.plot_output_path, "roc_auc_curve.png"),
                 format="png",
                 bbox_inches="tight",
             )
+        if show:
+            plt.show()
+
         plt.close()
 
         return
@@ -345,14 +354,15 @@ class ModelEvaluator:
         # plt.subplots_adjust(wspace=0.4)  # Add space between plots
         plt.tight_layout()
 
-        if show:
-            plt.show()
         if save:
             plt.savefig(
                 os.path.join(self.plot_output_path, "confusion_matrices.png"),
                 format="png",
                 bbox_inches="tight",
             )
+        if show:
+            plt.show()
+
         plt.close()
 
         return
@@ -380,8 +390,6 @@ class ModelEvaluator:
                 plt.ylabel(f"{self.metric} Value", fontsize=12)
                 plt.tight_layout()
 
-                if show:
-                    plt.show()
                 if save:
                     plt.savefig(
                         os.path.join(
@@ -391,6 +399,9 @@ class ModelEvaluator:
                         format="png",
                         bbox_inches="tight",
                     )
+                if show:
+                    plt.show()
+
                 plt.close()
 
         return
@@ -418,14 +429,15 @@ class ModelEvaluator:
         plt.ylabel("Importance", fontsize=12)
         plt.tight_layout()
 
-        if show:
-            plt.show()
         if save:
             plt.savefig(
                 os.path.join(self.plot_output_path, "feature_importance.png"),
                 format="png",
                 bbox_inches="tight",
             )
+        if show:
+            plt.show()
+
         plt.close()
 
         return
@@ -442,14 +454,15 @@ class ModelEvaluator:
         plt.title("SHAP Beeswarm Plot", fontsize=14)
         plt.tight_layout()
 
-        if show:
-            plt.show()
         if save:
             plt.savefig(
                 os.path.join(self.plot_output_path, "shap_values.png"),
                 format="png",
                 bbox_inches="tight",
             )
+        if show:
+            plt.show()
+
         plt.close()
 
         return
@@ -464,14 +477,15 @@ class ModelEvaluator:
         plt.title("SHAP Beeswarm Plot For Class 0", fontsize=14)
         plt.tight_layout()
 
-        if show:
-            plt.show()
         if save:
             plt.savefig(
                 os.path.join(self.plot_output_path, "shap_values.png"),
                 format="png",
                 bbox_inches="tight",
             )
+        if show:
+            plt.show()
+
         plt.close()
         return
 
@@ -492,14 +506,15 @@ class ModelEvaluator:
         plt.ylabel('Principal Components', fontsize=12)
         plt.tight_layout()
 
-        if show:
-            plt.show()
         if save:
             plt.savefig(
                 os.path.join(self.plot_output_path, "pca_loadings_heatmap.png"),
                 format="png",
                 bbox_inches="tight",
             )
+        if show:
+            plt.show()
+
         plt.close()
 
         return
@@ -527,14 +542,15 @@ class ModelEvaluator:
         plt.legend(loc='best')
         plt.tight_layout()
 
-        if show:
-            plt.show()
         if save:
             plt.savefig(
                 os.path.join(self.plot_output_path, "pca_loadings.png"),
                 format="png",
                 bbox_inches="tight",
             )
+        if show:
+            plt.show()
+
         plt.close()
 
         return
@@ -572,6 +588,8 @@ class ModelEvaluator:
         training_summary = training_summary.sort_values(
             by=training_summary.columns[1], ascending=False
         ).reset_index()
+
+        self.training_summary = training_summary
 
         # Apply the style to the DataFrame
         styled_training_summary = training_summary.style.apply(
@@ -638,9 +656,7 @@ class ModelEvaluator:
             pca=self.pca,
             binary=self.binary,
             # TODO: Get preprocessing steps from Preprocessor
-            preprocessing_list=_generate_preprocessing_steps_list(
-                self.preprocessing_steps_list
-            ),
+            preprocessing_list=_generate_preprocessing_steps_html(self.preprocessing_steps)
         )
 
         time_signature = datetime.strptime(
