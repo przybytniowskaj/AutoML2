@@ -92,7 +92,7 @@ def handle_imbalanced(
 
 
 def handle_skewed(
-    X: pd.DataFrame, feature_names: List[str]
+    X: pd.DataFrame, feature_names: List[str], threshold: float = 1
 ) -> (pd.DataFrame, PowerTransformer, List[str]):
     """
     Handles skewed features in the dataset using PowerTransformer.
@@ -102,6 +102,8 @@ def handle_skewed(
             Feature matrix.
         feature_names: List[str]
             Names of the features in the dataset.
+        threshold: float
+            Threshold for skewness.
 
     Returns:
         X_transformed: pd.DataFrame
@@ -116,7 +118,7 @@ def handle_skewed(
     pt = PowerTransformer(method="yeo-johnson", standardize=False)
     for feature in feature_names:
         feature_skewness = skew(X[feature])
-        if abs(feature_skewness) > 2:
+        if abs(feature_skewness) > threshold:
             skewed_feature_names.append(feature)
 
     if len(skewed_feature_names) > 0:

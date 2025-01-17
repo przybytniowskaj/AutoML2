@@ -13,6 +13,7 @@ from mamut.preprocessing.handlers import (  # handle_skewed,
     handle_outliers,
     handle_scaling,
     handle_selection,
+    handle_skewed,
 )
 
 
@@ -30,6 +31,7 @@ class Preprocessor:
         pca: bool = False,
         imbalanced_resampling: bool = True,
         resampling_strategy: Literal["SMOTE", "undersample", "combine"] = "SMOTE",
+        skew_threshold: float = 1,
         pca_threshold: float = 0.95,
         selection_threshold: float = 0.05,
         imbalance_threshold: float = 0.10,
@@ -48,6 +50,7 @@ class Preprocessor:
         self.imbalance_threshold = imbalance_threshold
         self.imbalanced_resampling = imbalanced_resampling
         self.resampling_strategy = resampling_strategy
+        self.skew_threshold = skew_threshold
 
         self.imbalanced_ = None
         self.missing_ = None
@@ -114,9 +117,9 @@ class Preprocessor:
             )
 
         # TODO: zbadac wlyw powertransformera, dostosowac skew treshold
-        # X, self.skew_trans_, self.skewed_feature_names_ = handle_skewed(
-        #     X, self.numeric_features
-        # )
+        X, self.skew_trans_, self.skewed_feature_names_ = handle_skewed(
+            X, self.numeric_features, threshold=self.skew_threshold
+        )
         if self.has_numeric_:
             X, self.scaler_ = handle_scaling(X, self.numeric_features, self.scaling)
 
@@ -135,7 +138,7 @@ class Preprocessor:
                 X, y, self.resampling_strategy, random_state=self.random_state
             )
 
-        # self.skewed_ = len(self.skewed_feature_names_) > 0
+        self.skewed_ = len(self.skewed_feature_names_) > 0
         self.fitted = True
 
         if isinstance(X, pd.DataFrame):
@@ -171,10 +174,10 @@ class Preprocessor:
             )
             X = X.drop(columns=self.categorical_features).join(encoded_features_df)
 
-        # if self.skewed_:
-        #     X[self.skewed_feature_names_] = self.skew_trans_.transform(
-        #         X[self.skewed_feature_names_]
-        #     )
+        if self.skewed_:
+            X[self.skewed_feature_names_] = self.skew_trans_.transform(
+                X[self.skewed_feature_names_]
+            )
 
         if self.has_numeric_:
             X[self.numeric_features] = self.scaler_.transform(X[self.numeric_features])
