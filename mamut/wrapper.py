@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from copy import copy
 from typing import List, Literal, Optional
 
 import joblib
@@ -163,6 +164,8 @@ class Mamut:
         self.X_test = None
         self.y_train = None
         self.y_test = None
+        self.binary = None
+        self.roc = None
 
         self.raw_fitted_models_ = None
         self.fitted_models_ = None
@@ -208,12 +211,13 @@ class Mamut:
             X_train, y_train = self.preprocessor.fit_transform(X_train, y_train)
             X_test = self.preprocessor.transform(X_test)
 
-        self.X_train = X_train
-        self.X_test = X_test
-        self.y_train = y_train
-        self.y_test = y_test
+        self.X_train = X_train # np.ndarray
+        self.X_test = X_test # np.ndarray
+        self.y_train = y_train # np.ndarray
+        self.y_test = y_test # pd.Series
         self.X = X
         self.y = y
+
 
         self.model_selector = ModelSelector(
             X_train,
@@ -243,6 +247,11 @@ class Mamut:
             for model in fitted_models.values()
         ]
 
+        # Update the score metric based on binary/multiclass problem (for ensembles)
+        self.score_metric = self.model_selector.score_metric
+        self.score_metric_name = self.model_selector.score_metric_name
+        self.binary = self.model_selector.binary
+        self.roc = self.model_selector.roc
         self.best_score_ = score_for_best_model
         self.best_model_ = Pipeline(
             [("preprocessor", self.preprocessor), ("model", best_model)]
@@ -314,7 +323,7 @@ class Mamut:
             X=self.X,
             y=self.y,
             optimizer=self.optimization_method,
-            metric=self.score_metric.__name__,
+            metric=self.score_metric_name,
             n_trials=self.n_iterations,
             excluded_models=self.exclude_models,
             studies=self.optuna_studies_,
@@ -322,6 +331,8 @@ class Mamut:
             pca_loadings=self.preprocessor.pca_loadings_,
             binary=self.model_selector.binary,
             preprocessing_steps=self.preprocessor.report(),
+            is_ensemble=self.greedy_ensemble_ is not None,
+            greedy_ensemble=self.greedy_ensemble_,
         )
 
         evaluator.evaluate_to_html(self.training_summary_)
@@ -384,7 +395,7 @@ class Mamut:
 
         return self.ensemble_
 
-    def create_greedy_ensemble(
+    def _create_greedy_ensemble_voting(
         self, n_models: int = 6, voting: Literal["soft", "hard"] = "soft"
     ) -> Pipeline:
         """
@@ -457,51 +468,96 @@ class Mamut:
         return self.greedy_ensemble_
 
 
-    def create_greedy_ensemble2(self, max_models=6):
+    def create_greedy_ensemble(self, max_models=6):
         self._check_fitted()
+        models = [model for name, model in self.raw_fitted_models_.items()]
 
-        if max_models > len(self.raw_fitted_models_):
-            max_models = len(self.raw_fitted_models_)
+        if max_models > len(models):
+            max_models = len(models)
             log.info(
-                f"Max models set to {max_models} as there are only {len(self.raw_fitted_models_)} models available"
+                f"Max models set to {max_models} as there are only {len(models)} models available"
                 f"in the bag-of-models used in this experiment.")
 
-        # Sort models by their performance
-        sorted_models = sorted(
-            self.raw_fitted_models_.items(),
-            key=lambda item: self.training_summary_.loc[
-                self.training_summary_["model"] == item[0], self.score_metric.__name__],
-            reverse=True
-        )
 
-        # Start with the best and second best models
+        # Sort models list by their performance on X_test
+        sorted_models = sorted(models,
+                               key=lambda model: self._score_model_on_test(model),
+                               reverse=True
+                               )
+
+        # Start with the best and second best model
         ensemble_models = [sorted_models[0], sorted_models[1]]
-        best_score = self.score_metric(self.y_test,
-                                       self._create_stacking_classifier(ensemble_models).predict(self.X_test))
+        remaining_models = {model.__class__.__name__: model for model in copy(sorted_models[2:])}
+        best_score = self._score_model_on_test(
+                                       self._create_stacking_classifier(ensemble_models)
+                                       .fit(self.X_train, self.y_train)
+                                       )
+        ensemble_scores = [best_score]
 
         # Greedily add models to the ensemble
-        for model in sorted_models[2:max_models]:
-            candidate_ensemble = ensemble_models + [model]
-            candidate_stacking_clf = self._create_stacking_classifier(candidate_ensemble)
-            candidate_stacking_clf.fit(self.X_train, self.y_train)
-            score = self.score_metric(self.y_test, candidate_stacking_clf.predict(self.X_test))
+        for i in range(max_models - 2):
+            best_score = 0
+            best_model = None
 
-            if score > best_score:
-                best_score = score
-                ensemble_models.append(model)
+            for model in remaining_models.values():
+                candidate_ensemble = ensemble_models + [model]
+                candidate_stacking_clf = self._create_stacking_classifier(candidate_ensemble)
+                candidate_stacking_clf.fit(self.X_train, self.y_train)
+                score = self._score_model_on_test(
+                    candidate_stacking_clf
+                )
+
+                if score > best_score:
+                    best_score = score
+                    best_model = model
+
+            ensemble_models.append(best_model)
+            ensemble_scores.append(best_score)
+            # Remove this best model from the remaining models dict
+            del remaining_models[best_model.__class__.__name__]
+
+        # From nested family of ensembles pick the best one based on ensemble_scores
+        best_score = max(ensemble_scores)
+        # Check from the end of the list to find the best ensemble
+        for i in range(len(ensemble_scores) - 1, 0, -1):
+            if ensemble_scores[i] == best_score:
+                ensemble_models = ensemble_models[:i + 2]
+                break
 
         # Create the final stacking classifier
         final_stacking_clf = self._create_stacking_classifier(ensemble_models)
         final_stacking_clf.fit(self.X_train, self.y_train)
-        self.ensemble_ = final_stacking_clf
+        self.greedy_ensemble_ = final_stacking_clf
 
-        log.info(f"Created greedy ensemble with {len(ensemble_models)} models. Best score: {best_score:.4f}")
-        # TODO: Return a pipeline
-        return self.ensemble_
+        log.info(f"Created greedy ensemble with {len(ensemble_models)} models. Best score: {best_score:.4f}."
+                 f"For details on the ensemble please run evaluate() method and see the report.")
+
+        # Create a pipeline with the best ensemble
+        self.greedy_ensemble_ = Pipeline(
+            [("preprocessor", self.preprocessor), ("model", final_stacking_clf)]
+        )
+
+        return self.greedy_ensemble_
+
+    def _score_model_on_test(self, model):
+        if self.roc:
+            if self.binary:
+                score_on_test = self.score_metric(
+                    self.y_test.values, model.predict_proba(self.X_test)[:, 1]
+                )
+            else:
+                score_on_test = self.score_metric(
+                    self.y_test.values, model.predict_proba(self.X_test)
+                )
+        else:
+            score_on_test = self.score_metric(
+                self.y_test.values, model.predict(self.X_test)
+            )
+        return score_on_test
 
 
     def _create_stacking_classifier(self, models):
-        estimators = [(name, clone(model)) for name, model in models]
+        estimators = [(model.__class__.__name__, clone(model)) for model in models]
         return StackingClassifier(estimators=estimators, final_estimator=RandomForestClassifier())
 
 

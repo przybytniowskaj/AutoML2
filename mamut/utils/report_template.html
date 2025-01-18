@@ -240,7 +240,7 @@
     </div>
     <div class="section">
         <div style="display: flex; justify-content: space-between;">
-            <div style="width: 45%;">
+            <div style="width: 45%; margin-left:5%;">
                 <p>
                     Below you will see the evaluation of the ensemble model. The ensemble model was created
                     by combining individual models using the <b>{{ ensemble_method }}</b> method.
@@ -249,16 +249,18 @@
                     The best ensemble model was selected.
                 </p>
             </div>
-            <div style="width: 45%;">
-                <ul>
-                    {% for estimator in base_estimators %}
-                        <li>{{ estimator }}</li>
-                    {% endfor %}
+            <div style="width: 1px; background-color: #ddd; margin: 0 1vw;"></div>
+            <div style="width: 45%; margin-right:5%;">
+                <p><b>Ensemble Stacking Model:</b></p>
+                <ul style="list-style-type:'&#8627;'">
+                    {{ ensemble_list | safe }}
                 </ul>
             </div>
         </div>
     </div>
     <div class="section">
+        <p>The results of the powerful greedy ensemble created during the experiment
+        on the <b>test set</b> are available in the below table.</p>
         {{ ensemble_summary | safe }}
     </div>
     {% endif %}

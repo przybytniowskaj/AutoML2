@@ -28,6 +28,7 @@ from sklearn.metrics import (
     roc_curve,
 )
 from sklearn.multiclass import OneVsRestClassifier
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import roc_curve, auc
 
@@ -166,6 +167,22 @@ def _generate_models_list(excluded_models: List[str]) -> List[str]:
 
     return available_models
 
+def _generate_ensemble_list(ensemble: Pipeline) -> str:
+    ensemble = ensemble.named_steps["model"]
+    base_estimators = ensemble.estimators
+    meta = ensemble.final_estimator
+    # Generate HTML list with ensemble contents:
+    html_list = ""
+
+    html_list += "<li><strong>Base Estimators:</strong><ul>"
+    for name, estimator in base_estimators:
+        html_list += f"<li>{name}: {estimator.__class__.__name__}</li>"
+    html_list += "</ul></li>"
+
+    html_list += f"<li><strong>Meta Model:</strong> <ul><li>{meta.__class__.__name__}</li></ul></li>"
+
+    return html_list
+
 
 class ModelEvaluator:
 
@@ -189,6 +206,8 @@ class ModelEvaluator:
                  pca_loadings,
                  binary: bool,
                  preprocessing_steps,
+                 is_ensemble: bool,
+                 greedy_ensemble,
                  excluded_models : List[str] = None,
                  ):
 
@@ -206,6 +225,8 @@ class ModelEvaluator:
         self.training_summary = training_summary
         self.pca_loadings = pca_loadings
         self.binary = binary
+        self.is_ensemble = is_ensemble
+        self.greedy_ensemble = greedy_ensemble
         if self.pca_loadings is not None:
             self.pca = True
         else:
@@ -467,6 +488,7 @@ class ModelEvaluator:
 
         return
 
+
     def _plot_shap_beeswarm_multiclass(self, model, show: bool = False, save: bool = True) -> None:
         # Calculate SHAP values
         explainer = shap.Explainer(model, self.X_train)
@@ -556,6 +578,50 @@ class ModelEvaluator:
         return
 
 
+    def _generate_greedy_ensemble_results_html(self, greedy_ensemble):
+        """
+        Generates an HTML table with the results of the greedy ensemble.
+
+        Parameters
+        ----------
+        greedy_ensemble : sklearn.pipeline.Pipeline
+            The greedy ensemble pipeline containing preprocessing steps and stacking classifier.
+
+        Returns
+        -------
+        str
+            An HTML string representing the results of the greedy ensemble.
+        """
+        greedy_ensemble = greedy_ensemble.named_steps["model"]
+        # Score the greedy ensemble using the provided metric
+        results = self._score_model_with_metrics(greedy_ensemble)
+
+        # Convert results to a DataFrame
+        results_df = pd.DataFrame(
+            [
+                {
+                    "model": "Greedy Ensemble",
+                    **results,
+                }
+            ]
+        )
+        results_df = results_df.rename(
+            columns={
+                "model": "Model",
+                "accuracy_score": "Accuracy",
+                "balanced_accuracy_score": "Balanced Accuracy",
+                "precision_score": "Precision",
+                "recall_score": "Recall",
+                "f1_score": "F1 Score",
+                "jaccard_score": "Jaccard Score",
+                "roc_auc_score": "ROC AUC",
+            }
+        )
+
+        # Generate HTML table with the results
+        html_table = results_df.to_html(index=False)
+        return html_table
+
     def evaluate_to_html(
         self,
         training_summary: pd.DataFrame,
@@ -587,7 +653,7 @@ class ModelEvaluator:
         # Sort the training_summary DataFrame by the score_metric column
         training_summary = training_summary.sort_values(
             by=training_summary.columns[1], ascending=False
-        ).reset_index()
+        ).reset_index(drop=True)
 
         self.training_summary = training_summary
 
@@ -655,6 +721,10 @@ class ModelEvaluator:
             feature_importance_method="Random Forest Importances",
             pca=self.pca,
             binary=self.binary,
+            is_ensemble=self.is_ensemble,
+            ensemble_method="Stacking",
+            ensemble_list=_generate_ensemble_list(self.greedy_ensemble),
+            ensemble_summary=self._generate_greedy_ensemble_results_html(self.greedy_ensemble),
             # TODO: Get preprocessing steps from Preprocessor
             preprocessing_list=_generate_preprocessing_steps_html(self.preprocessing_steps)
         )
@@ -669,6 +739,34 @@ class ModelEvaluator:
 
         return html_content
 
+    def _score_model_with_metrics(self, fitted_model):
+        if not hasattr(fitted_model, "predict"):
+            raise ValueError(
+                "The model is not fitted and can not be scored with any metric."
+            )
+
+        y_pred = fitted_model.predict(self.X_test)
+        y_pred_proba = fitted_model.predict_proba(self.X_test)
+        if self.binary:
+            y_pred_proba = y_pred_proba[:, 1]
+
+        results = {
+            "accuracy_score": accuracy_score(self.y_test, y_pred),
+            "balanced_accuracy_score": balanced_accuracy_score(self.y_test, y_pred),
+            "precision_score": precision_score(self.y_test, y_pred, average="weighted"),
+            "recall_score": recall_score(self.y_test, y_pred, average="weighted"),
+            "f1_score": f1_score(self.y_test, y_pred, average="weighted"),
+            "jaccard_score": jaccard_score(self.y_test, y_pred, average="weighted"),
+            "roc_auc_score": roc_auc_score(
+                self.y_test, y_pred_proba, multi_class="ovr", average="weighted"
+            ),
+        }
+
+        results = {
+            self.metric: results.pop(self.metric),
+            **results,
+        }
+        return results
 
 def _highlight_first_cell(s):
     return [
@@ -679,3 +777,4 @@ def _highlight_first_cell(s):
         )
         for i in range(len(s))
     ]
+

@@ -55,6 +55,7 @@ class ModelSelector:
         if not exclude_models:
             exclude_models = []
 
+
         self.models = [
             (
                 eval(model)(random_state=random_state)
@@ -142,7 +143,7 @@ class ModelSelector:
             print(f"Optimizing model: {model.__class__.__name__}")
             params, score, duration, study = self.optimize_model(model)
             print(
-                f"Best parameters: {params}, score: {score:.4f} {self.score_metric.__name__}\n"
+                f"Best parameters: {params}, score: {score:.4f} {self.score_metric_name}\n"
             )
 
             model.set_params(**params)
@@ -190,9 +191,9 @@ class ModelSelector:
 
         print(
             f"Found best model: {best_model.__class__.__name__} with parameters {params_for_best_model} \n"
-            f"and score {score_for_best_model:.4f} {self.score_metric.__name__}. \n"
+            f"and score {score_for_best_model:.4f} {self.score_metric_name}. \n"
             f"To access your best model use: mamut.best_model_ field. \n"
-            f"To create a powerful ensemble of models use: create_ensemble() function. \n"
+            f"To create a powerful ensemble of models use: create_greedy_ensemble() function. \n"
         )
 
         return (
