@@ -58,13 +58,8 @@ mlp_params = {
     "learning_rate": (["constant", "invscaling", "adaptive"], "categorical"),
     "learning_rate_init": (1e-4, 1e-1, "log"),
     "power_t": (0.1, 0.9, "float"),
-    "max_iter": (200, 200, "int"),  # TODO: potentially increase
+    "max_iter": (100, 200, "int"),
     "momentum": (0.5, 0.9, "float"),
-}
-
-lda_params = {
-    "solver": (["lsqr", "eigen"], "categorical"),
-    "shrinkage": (["auto", None], "categorical"),
 }
 
 gnb_params = {
@@ -77,10 +72,9 @@ knn_params = {
 
 model_param_dict = {
     "LogisticRegression": lr_params,
-    "LinearDiscriminantAnalysis": lda_params,
     "RandomForestClassifier": tree_params,
     "SVC": svc_params,
-    # "XGBClassifier": xgb_params,
+    "XGBClassifier": xgb_params,
     "MLPClassifier": mlp_params,
     "GaussianNB": gnb_params,
     "KNeighborsClassifier": knn_params,
@@ -93,7 +87,7 @@ metric_dict = {
     "f1": f1_score,
     "balanced_accuracy": balanced_accuracy_score,
     "jaccard": jaccard_score,
-    "roc_auc": roc_auc_score,
+    "roc_auc_score": roc_auc_score,
 }
 
 preprocessing_steps = {

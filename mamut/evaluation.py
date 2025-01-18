@@ -2,6 +2,7 @@ import base64
 import os
 import platform
 import time
+import math
 from datetime import datetime
 from typing import Callable, List
 from itertools import cycle
@@ -15,7 +16,7 @@ import shap
 import seaborn as sns
 from jinja2 import Environment, FileSystemLoader
 from matplotlib import gridspec
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -54,22 +55,16 @@ def _generate_experiment_setup_table():
         "CPU Cores": psutil.cpu_count(logical=True),
     }
 
-    # Convert the system information to a DataFrame
     df = pd.DataFrame(system_info.items(), columns=["Attribute", "Value"])
-
-    # Convert the DataFrame to an HTML table
     html_table = df.to_html(index=False)
-
     return html_table
 
 
 def _generate_dataset_overview(
     X: pd.DataFrame, y: pd.Series
 ) -> (List[int], pd.DataFrame, pd.DataFrame):
-    # Dataset shape
     n_observations, n_features = X.shape
 
-    # Calculate number of rows with any missing values:
     n_rows_missing = X.isnull().any(axis=1).sum()
 
     # Calculate the number of outliers according to IsolationForest method:
@@ -79,7 +74,6 @@ def _generate_dataset_overview(
 
     dataset_basic_list = [n_observations, n_features, n_rows_missing, n_outliers]
 
-    # Feature summary
     feature_summary = X.dtypes.reset_index()
     feature_summary.columns = ["Feature", "Data Type"]
     feature_summary["Type"] = feature_summary["Data Type"].apply(
@@ -93,7 +87,6 @@ def _generate_dataset_overview(
         feature_summary = feature_summary.head(10)
     feature_summary = feature_summary[["Feature", "Type", "Data Type"]]
 
-    # Class distribution (if target column is provided)
     if not isinstance(y, pd.Series):
         y = pd.Series(y)
     class_distribution = y.value_counts().reset_index()
@@ -103,10 +96,8 @@ def _generate_dataset_overview(
 
 
 def _generate_preprocessing_steps_list(steps) -> str:
-    # Initialize a dictionary to hold categorized steps
     categorized_steps = {}
 
-    # Categorize each step
     for step in steps:
         if step in preprocessing_steps:
             category, description = preprocessing_steps[step]
@@ -116,7 +107,6 @@ def _generate_preprocessing_steps_list(steps) -> str:
                 f"<strong>{step}</strong>: {description}"
             )
 
-    # Generate HTML unordered list with some styling
     html_prep_list = ""
     for category, tools in categorized_steps.items():
         html_prep_list += f"<li style='padding-left: 10px;'><strong>{category}</strong><ul style='list-style-type: '&#x2192'; margin-left: 20px;'>"
@@ -125,6 +115,7 @@ def _generate_preprocessing_steps_list(steps) -> str:
         html_prep_list += "</ul></li>"
 
     return html_prep_list
+
 
 def _generate_preprocessing_steps_html(report):
     """
@@ -159,15 +150,17 @@ def _generate_preprocessing_steps_html(report):
 
     return html_list
 
+
 def _generate_models_list(excluded_models: List[str]) -> List[str]:
-    # Get all available models
     all_models = model_param_dict.keys()
-    # Remove excluded models
     available_models = [model for model in all_models if model not in excluded_models]
 
     return available_models
 
+
 def _generate_ensemble_list(ensemble: Pipeline) -> str:
+    if not ensemble:
+        return ""
     ensemble = ensemble.named_steps["model"]
     base_estimators = ensemble.estimators
     meta = ensemble.final_estimator
@@ -188,16 +181,15 @@ class ModelEvaluator:
 
     report_template_path: str = os.path.join(os.path.dirname(__file__), "utils")
 
-
     def __init__(self,
                  models: dict,
                  # X_test and y_test are preprocessed. X and y are not.
-                 X_test : np.ndarray,
-                 y_test : np.ndarray,
+                 X_test: np.ndarray,
+                 y_test: np.ndarray,
                  X_train: np.ndarray,
                  y_train: np.ndarray,
-                 X : pd.DataFrame,
-                 y : pd.Series,
+                 X: pd.DataFrame,
+                 y: pd.Series,
                  optimizer: str,
                  n_trials: int,
                  metric: str,
@@ -208,7 +200,8 @@ class ModelEvaluator:
                  preprocessing_steps,
                  is_ensemble: bool,
                  greedy_ensemble,
-                 excluded_models : List[str] = None,
+                 excluded_models: List[str] = None,
+                 n_top_models: int = 3,
                  ):
 
         self.models = models
@@ -239,6 +232,8 @@ class ModelEvaluator:
         self.report_output_path = os.path.join(os.getcwd(), "mamut_report")
         self.plot_output_path = os.path.join(self.report_output_path, "plots")
 
+        self.n_top_models = n_top_models
+
         # Create the report directory it doesn't exist:
         os.makedirs(self.report_output_path, exist_ok=True)
         os.makedirs(self.plot_output_path, exist_ok=True)
@@ -246,49 +241,45 @@ class ModelEvaluator:
 
 
     def _set_plt_style(self) -> None:
-        sns.set_context("notebook", font_scale=1.1)
+        sns.set_context("notebook", font_scale=1.05)
         plt.style.use("fivethirtyeight")
         # Set background color of all plots to #f0f8ff;
         plt.rcParams["axes.facecolor"] = "#f0f8ff"
         plt.rcParams["figure.facecolor"] = "#f0f8ff"
-        # Set border color to skyblue
-        plt.rcParams["axes.edgecolor"] = "#007bb5"
-        plt.rcParams["figure.edgecolor"] = "#007bb5"
-
 
     def evaluate(self, training_summary: pd.DataFrame):
         return self.evaluate_to_html(training_summary)
 
     def plot_results_in_notebook(self):
         if self.binary:
-            self._plot_roc_auc_curve(training_summary=self.training_summary, show=True, save=False)
+            self._plot_roc_auc_curve(training_summary=self.training_summary, n_top=self.n_top_models, show=True, save=False)
         else:
-            self._plot_roc_auc_curve_multiclass(training_summary=self.training_summary, show=True, save=False)
-        self._plot_confusion_matrices(show=True, save=False, training_summary=self.training_summary)
-        self._plot_hyperparameter_tuning_history(show=True, save=False, training_summary=self.training_summary)
+            self._plot_roc_auc_curve_multiclass(training_summary=self.training_summary, n_top=self.n_top_models, show=True, save=False)
+        self._plot_confusion_matrices(n_top=self.n_top_models, show=True, save=False, training_summary=self.training_summary)
+        self._plot_hyperparameter_tuning_history(n_top=self.n_top_models, show=True, save=False, training_summary=self.training_summary)
         return
 
     def _plot_roc_auc_curve(
-        self, training_summary: pd.DataFrame, show: bool = False, save: bool = True
+        self, training_summary: pd.DataFrame, n_top: int = 3, show: bool = False, save: bool = True
     ) -> None:
-        plt.figure(figsize=(10, 6))
-        top_3_models = training_summary["Model"].head(3).to_numpy()
+        fig, ax = plt.subplots(figsize=(12, 6))
+        top_models = training_summary["Model"].head(n_top).to_numpy()
 
-        for model_name in top_3_models:
+        for model_name in top_models:
             model = next(
                 m for m in self.models.values() if m.__class__.__name__ == model_name
             )
             y_pred = model.predict_proba(self.X_test)[:, 1]
             fpr, tpr, thresholds = roc_curve(self.y_test, y_pred)
             auc = roc_auc_score(self.y_test, y_pred)
-            plt.plot(fpr, tpr, label=f"{model_name} ROC ({auc:.2f})")
+            ax.plot(fpr, tpr, lw=1.5, label=f"{model_name} ROC ({auc:.2f})")
 
-        plt.plot([0, 1], [0, 1], "k--", lw=2)
-        plt.xlim([-0.01, 1.01])
-        plt.ylim([-0.01, 1.05])
-        plt.xlabel("False Positive Rate", fontsize=14)
-        plt.ylabel("True Positive Rate", fontsize=14)
-        plt.legend(loc="lower right", fontsize=12)
+        ax.plot([0, 1], [0, 1], "k--", lw=1.5)
+        ax.set_xlim([-0.01, 1.01])
+        ax.set_ylim([-0.01, 1.05])
+        ax.set_xlabel("False Positive Rate", fontsize=12)
+        ax.set_ylabel("True Positive Rate", fontsize=12)
+        ax.legend(loc="lower right", fontsize=10)
         plt.tight_layout()
 
         if save:
@@ -300,38 +291,34 @@ class ModelEvaluator:
         if show:
             plt.show()
 
-        plt.close()
+        plt.close(fig)
 
         return
 
 
-    def _plot_roc_auc_curve_multiclass(self, training_summary: pd.DataFrame, show: bool = False,
+    def _plot_roc_auc_curve_multiclass(self, training_summary: pd.DataFrame, n_top: int = 3, show: bool = False,
                                        save: bool = True) -> None:
-        plt.figure(figsize=(10, 8))
-        top_3_models = training_summary["Model"].head(3).to_numpy()
+        fig, ax = plt.subplots(figsize=(12, 6))
+        top_models = training_summary["Model"].head(n_top).to_numpy()
         y_test_bin = label_binarize(self.y_test, classes=np.unique(self.y_test))
-        n_classes = y_test_bin.shape[1]
 
-        for model_name in top_3_models:
+        for model_name in top_models:
             model = next(
                 m for m in self.models.values() if m.__class__.__name__ == model_name
             )
-            classifier = OneVsRestClassifier(model)
-            y_score = classifier.fit(self.X_train, self.y_train).predict_proba(self.X_test)
-
-            # Compute micro-average ROC curve and ROC area
+            y_score = model.fit(self.X_train, self.y_train).predict_proba(self.X_test)
             fpr, tpr, _ = roc_curve(y_test_bin.ravel(), y_score.ravel())
             roc_auc = auc(fpr, tpr)
 
-            plt.plot(fpr, tpr, lw=2, label=f'Micro-averaged {model_name} (area = {roc_auc:0.2f})')
+            ax.plot(fpr, tpr, lw=2, label=f'Micro-averaged {model_name} (area = {roc_auc:0.2f})')
 
-        plt.plot([0, 1], [0, 1], "k--", lw=2)
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel("False Positive Rate", fontsize=14)
-        plt.ylabel("True Positive Rate", fontsize=14)
-        plt.title("Micro-Averaged ROC Curve (One-vs-Rest)", fontsize=14)
-        plt.legend(loc="lower right", fontsize=12)
+        ax.plot([0, 1], [0, 1], "k--", lw=2)
+        ax.set_xlim([-0.01, 1.0])
+        ax.set_ylim([0.0, 1.05])
+        ax.set_xlabel("False Positive Rate", fontsize=14)
+        ax.set_ylabel("True Positive Rate", fontsize=14)
+        ax.set_title("Micro-Averaged ROC Curve (One-vs-Rest)", fontsize=14)
+        ax.legend(loc="lower right", fontsize=12)
         plt.tight_layout()
 
         if save:
@@ -342,23 +329,25 @@ class ModelEvaluator:
             )
         if show:
             plt.show()
-
-        plt.close()
+        plt.close(fig)
 
         return
 
 
     def _plot_confusion_matrices(
-        self, training_summary: pd.DataFrame, show: bool = False, save: bool = True
+        self, training_summary: pd.DataFrame, n_top: int = 3, show: bool = False, save: bool = True
     ) -> None:
-        fig = plt.figure(figsize=(18, 5))
-        top_3_models = training_summary["Model"].head(3).to_numpy()
-        # plt.figure(figsize=(24, 8))
-        gs = gridspec.GridSpec(
-            1, 3, wspace=0.4
-        )  # Create a grid with 1 row and 3 columns, with space between plots
+        rows = math.ceil(n_top / 3)
+        fig = plt.figure(figsize=(18, 5*rows))
+        top_models = training_summary["Model"].head(n_top).to_numpy()
+        if n_top == 3:
+            gs = gridspec.GridSpec(1, 3, wspace=0.4)
+        elif n_top > 3:
+            gs = gridspec.GridSpec(rows, 3, wspace=0.3, hspace=0.3)
+        else:
+            gs = gridspec.GridSpec(1, n_top, wspace=0.3, hspace=0.3)
 
-        for i, model_name in enumerate(top_3_models):
+        for i, model_name in enumerate(top_models):
             model = next(
                 m for m in self.models.values() if m.__class__.__name__ == model_name
             )
@@ -366,13 +355,11 @@ class ModelEvaluator:
             cm = confusion_matrix(self.y_test, y_pred)
 
             ax = fig.add_subplot(gs[i])
-            # plt.subplot(1, 3, i + 1)
             sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False, ax=ax)
             plt.title(f"{model_name}", fontsize=14)
             plt.xlabel("Predicted", fontsize=12)
             plt.ylabel("Actual", fontsize=12)
 
-        # plt.subplots_adjust(wspace=0.4)  # Add space between plots
         plt.tight_layout()
 
         if save:
@@ -389,22 +376,23 @@ class ModelEvaluator:
         return
 
     def _plot_hyperparameter_tuning_history(
-        self, training_summary: pd.DataFrame, show: bool = False, save: bool = True
+        self, training_summary: pd.DataFrame, n_top: int = 3, show: bool = False, save: bool = True
     ) -> None:
         self._set_plt_style()
-        top_3_models = training_summary["Model"].head(3).to_numpy()
+        top_models = training_summary["Model"].head(n_top).to_numpy()
 
-        for i, model_name in enumerate(top_3_models):
+        for i, model_name in enumerate(top_models):
             study = self.studies.get(model_name)
             if study:
                 plt.figure(figsize=(6, 5), facecolor="#f0f8ff")
                 ax = optuna.visualization.matplotlib.plot_optimization_history(study)
-                ax.set_facecolor("#f0f8ff")
-                ax.spines["top"].set_color("#007bb5")
-                ax.spines["right"].set_color("#007bb5")
-                ax.spines["bottom"].set_color("#007bb5")
-                ax.spines["left"].set_color("#007bb5")
-                ax.grid(color="grey")  # Change grid color to grey
+                if not show:
+                    ax.set_facecolor("#f0f8ff")
+                    ax.spines["top"].set_color("#007bb5")
+                    ax.spines["right"].set_color("#007bb5")
+                    ax.spines["bottom"].set_color("#007bb5")
+                    ax.spines["left"].set_color("#007bb5")
+                    ax.grid(color="grey")  # Change grid color to grey
                 ax.legend().set_visible(False)  # Remove legend
                 plt.title(f"{model_name} Tuning History", fontsize=14)
                 plt.xlabel("Trial", fontsize=12)
@@ -427,22 +415,17 @@ class ModelEvaluator:
 
         return
 
-
     def _plot_feature_importances(self, show: bool = False, save: bool = True) -> None:
         self._set_plt_style()
-        # Train a Random Forest model
-        rf = RandomForestClassifier(random_state=42)
+        rf = ExtraTreesClassifier(random_state=42)
         rf.fit(self.X_train, self.y_train)
 
-        # Get feature importances
         importances = rf.feature_importances_
         indices = np.argsort(importances)[::-1]
 
-        # Limit to top 10 features if there are more than 10
         if len(indices) > 10:
             indices = indices[:10]
 
-        # Plot the feature importances
         plt.figure(figsize=(10, 6))
         plt.bar(range(len(indices)), importances[indices], align="center")
         plt.xticks(range(len(indices)), self.X.columns[indices], rotation=90)
@@ -463,54 +446,47 @@ class ModelEvaluator:
 
         return
 
-
     def _plot_shap_beeswarm(self, model, show: bool = False, save: bool = True) -> None:
-        # Calculate SHAP values
-        explainer = shap.Explainer(model, self.X_train)
+        if model.__class__.__name__ in ["KNeighborsClassifier", "SVC", "MLPClassifier"]:
+            explainer = shap.Explainer(model.predict, self.X_train)
+        else:
+            explainer = shap.Explainer(model, self.X_train)
         shap_values = explainer(self.X_train)
 
-        # Create SHAP beeswarm plot
-        plt.figure(figsize=(10, 6))
-        shap.plots.beeswarm(shap_values, max_display=10, show=False)
-        plt.title("SHAP Beeswarm Plot", fontsize=14)
-        plt.tight_layout()
+        if len(shap_values.shape) == 3:
+            num_classes = shap_values.shape[2]
+            for class_idx in range(num_classes):
+                plt.figure(figsize=(10, 6))
+                shap.plots.beeswarm(shap_values[:, :, class_idx], show=False)
+                plt.title(f"SHAP Beeswarm Plot For Class {class_idx}", fontsize=14)
+                plt.tight_layout()
 
-        if save:
-            plt.savefig(
-                os.path.join(self.plot_output_path, "shap_values.png"),
-                format="png",
-                bbox_inches="tight",
-            )
-        if show:
-            plt.show()
+                if save:
+                    plt.savefig(
+                        os.path.join(self.plot_output_path, f"shap_beeswarm_class_{class_idx}.png"),
+                        format="png",
+                        bbox_inches="tight",
+                    )
+                if show:
+                    plt.show()
 
-        plt.close()
+                plt.close()
+        else:
+            plt.figure(figsize=(10, 6))
+            shap.plots.beeswarm(shap_values, max_display=10, show=False)
+            plt.title("SHAP Beeswarm Plot", fontsize=14)
+            plt.tight_layout()
 
+            if save:
+                plt.savefig(
+                    os.path.join(self.plot_output_path, "shap_values.png"),
+                    format="png",
+                    bbox_inches="tight",
+                )
+            if show:
+                plt.show()
+            plt.close()
         return
-
-
-    def _plot_shap_beeswarm_multiclass(self, model, show: bool = False, save: bool = True) -> None:
-        # Calculate SHAP values
-        explainer = shap.Explainer(model, self.X_train)
-        shap_values = explainer(self.X_train)
-        # Create SHAP beeswarm plot only for the first class (0)
-        plt.figure(figsize=(10, 6))
-        shap.plots.beeswarm(shap_values[:, :, 0], show=False)
-        plt.title("SHAP Beeswarm Plot For Class 0", fontsize=14)
-        plt.tight_layout()
-
-        if save:
-            plt.savefig(
-                os.path.join(self.plot_output_path, "shap_values.png"),
-                format="png",
-                bbox_inches="tight",
-            )
-        if show:
-            plt.show()
-
-        plt.close()
-        return
-
 
     def _plot_pca_loadings(self, show: bool = False, save: bool = True) -> None:
         if self.pca_loadings is None:
@@ -536,11 +512,9 @@ class ModelEvaluator:
             )
         if show:
             plt.show()
-
         plt.close()
 
         return
-
 
     def _plot_pca_loadings2(self, show: bool = False, save: bool = True) -> None:
         if self.pca_loadings is None:
@@ -572,7 +546,6 @@ class ModelEvaluator:
             )
         if show:
             plt.show()
-
         plt.close()
 
         return
@@ -592,11 +565,11 @@ class ModelEvaluator:
         str
             An HTML string representing the results of the greedy ensemble.
         """
+        if not greedy_ensemble:
+            return ""
         greedy_ensemble = greedy_ensemble.named_steps["model"]
-        # Score the greedy ensemble using the provided metric
         results = self._score_model_with_metrics(greedy_ensemble)
 
-        # Convert results to a DataFrame
         results_df = pd.DataFrame(
             [
                 {
@@ -618,7 +591,6 @@ class ModelEvaluator:
             }
         )
 
-        # Generate HTML table with the results
         html_table = results_df.to_html(index=False)
         return html_table
 
@@ -636,7 +608,6 @@ class ModelEvaluator:
                 "Can't produce a HTML report because training_summary should be a DataFrame and not empty."
             )
 
-        # Preprocess the training_summary DataFrame:
         training_summary = training_summary.rename(
             columns={
                 "model": "Model",
@@ -657,24 +628,19 @@ class ModelEvaluator:
 
         self.training_summary = training_summary
 
-        # Apply the style to the DataFrame
         styled_training_summary = training_summary.style.apply(
             _highlight_first_cell, axis=1
         )
 
         # Transform summary to HTML:
         training_summary_html = styled_training_summary.to_html()
-
-        # Transform the header image to base64:
         image_header_path = os.path.join(self.report_template_path, "mamut_header.png")
         base64_image = _get_base64_image(image_header_path)
 
-        # Calculate Dataset Overview:
         dataset_basic_list, feature_summary, class_distribution = (
             _generate_dataset_overview(self.X, self.y)
         )
 
-        # Create and save roc_auc_curve as .png file:
         if self.binary:
             self._plot_roc_auc_curve(training_summary)
         else:
@@ -686,10 +652,7 @@ class ModelEvaluator:
         best_model_name = training_summary.iloc[0]["Model"]
         best_model = self.models[best_model_name]
 
-        if self.binary:
-            self._plot_shap_beeswarm(best_model)
-        else:
-            self._plot_shap_beeswarm_multiclass(best_model)
+        self._plot_shap_beeswarm(best_model)
 
         if self.pca:
             self._plot_pca_loadings()
@@ -718,14 +681,13 @@ class ModelEvaluator:
             basic_dataset_info=dataset_basic_list,
             feature_summary=feature_summary.to_html(index=False),
             class_distribution=class_distribution.to_html(index=False),
-            feature_importance_method="Random Forest Importances",
+            feature_importance_method="Extra Trees Importances",
             pca=self.pca,
             binary=self.binary,
             is_ensemble=self.is_ensemble,
             ensemble_method="Stacking",
             ensemble_list=_generate_ensemble_list(self.greedy_ensemble),
             ensemble_summary=self._generate_greedy_ensemble_results_html(self.greedy_ensemble),
-            # TODO: Get preprocessing steps from Preprocessor
             preprocessing_list=_generate_preprocessing_steps_html(self.preprocessing_steps)
         )
 
@@ -777,4 +739,3 @@ def _highlight_first_cell(s):
         )
         for i in range(len(s))
     ]
-

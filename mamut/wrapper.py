@@ -9,20 +9,15 @@ import pandas as pd
 import numpy as np
 from sklearn.base import clone
 from sklearn.ensemble import VotingClassifier, StackingClassifier, RandomForestClassifier
-from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 
 from mamut.preprocessing.preprocessing import Preprocessor
 from mamut.utils.utils import metric_dict
 
-from .evaluation import ModelEvaluator  # noqa
+from .evaluation import ModelEvaluator
 from .model_selection import ModelSelector
-
-# from xgboost import XGBClassifier
-
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -120,7 +115,7 @@ class Mamut:
             "roc_auc",
         ] = "f1",
         optimization_method: Literal["random_search", "bayes"] = "bayes",
-        n_iterations: Optional[int] = 50,
+        n_iterations: Optional[int] = 30,
         random_state: Optional[int] = 42,
         **preprocessor_kwargs,
     ):
@@ -204,7 +199,7 @@ class Mamut:
         y = pd.Series(y)
 
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, stratify=y
+            X, y, test_size=0.2, stratify=y, random_state=self.random_state
         )
 
         if self.preprocess:
@@ -308,7 +303,7 @@ class Mamut:
         """
         return self._predict(X, proba=True)
 
-    def evaluate(self) -> None:
+    def evaluate(self, n_top_models: int = 3) -> None:
         """
         Evaluates the fitted models.
         """
@@ -318,8 +313,8 @@ class Mamut:
             self.raw_fitted_models_,
             X_test=self.X_test,
             y_test=self.y_test,
-            X_train = self.X_train,
-            y_train = self.y_train,
+            X_train=self.X_train,
+            y_train=self.y_train,
             X=self.X,
             y=self.y,
             optimizer=self.optimization_method,
@@ -331,6 +326,7 @@ class Mamut:
             pca_loadings=self.preprocessor.pca_loadings_,
             binary=self.model_selector.binary,
             preprocessing_steps=self.preprocessor.report(),
+            n_top_models=n_top_models,
             is_ensemble=self.greedy_ensemble_ is not None,
             greedy_ensemble=self.greedy_ensemble_,
         )
@@ -380,10 +376,9 @@ class Mamut:
             ],
             voting=voting,
         )
-
         ensemble.fit(self.X_train, self.y_train)
         y_pred = ensemble.predict(self.X_test)
-        score = self.score_metric(self.y_test, y_pred)
+        score = self.score_metric(self.y_test.values, y_pred)
 
         self.ensemble_ = Pipeline(
             [("preprocessor", self.preprocessor), ("model", ensemble)]
@@ -623,7 +618,6 @@ class Mamut:
         final_ensemble = VotingClassifier(estimators=selected_models, voting=voting)
         final_ensemble.fit(self.X_train, self.y_train)
         return final_ensemble, ensemble_performance
-
 
     def _predict(self, X: pd.DataFrame, proba: bool = False):
         """

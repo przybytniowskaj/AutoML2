@@ -7,9 +7,6 @@ import numpy as np
 import optuna
 import pandas as pd
 from optuna.samplers import RandomSampler, TPESampler
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis  # noqa
-from sklearn.ensemble import RandomForestClassifier  # noqa
-from sklearn.linear_model import LogisticRegression  # noqa
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -20,15 +17,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import StratifiedKFold
-from sklearn.naive_bayes import GaussianNB  # noqa
-from sklearn.neighbors import KNeighborsClassifier  # noqa
-from sklearn.neural_network import MLPClassifier  # noqa
-from sklearn.svm import SVC  # noqa
 
 from mamut.utils.utils import adjust_search_spaces, model_param_dict, sample_parameter
-
-# from xgboost import XGBClassifier  # noqa
-
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 warnings.filterwarnings("ignore")
@@ -54,7 +44,6 @@ class ModelSelector:
         self.y_test = y_test
         if not exclude_models:
             exclude_models = []
-
 
         self.models = [
             (
@@ -113,6 +102,8 @@ class ModelSelector:
                 if self.roc
                 else model.predict(X_val_fold)
             )
+            if self.binary and self.roc:
+                val_pred = val_pred[:, 1]
 
             cv_scores.append(self.score_metric(y_val_fold, val_pred))
         mean_cv_score = np.mean(cv_scores)

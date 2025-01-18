@@ -71,7 +71,7 @@ class Preprocessor:
         num_imputation: Literal[
             "iterative", "knn", "mean", "median", "constant"
         ] = "knn",
-        cat_imputation: Literal["most_frequent", "constant"] = "constant",
+        cat_imputation: Literal["most_frequent", "constant"] = "most_frequent",
         scaling: Literal["standard", "robust"] = "standard",
         feature_selection: bool = False,
         pca: bool = False,
