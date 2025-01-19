@@ -1,24 +1,24 @@
 import base64
+import math
 import os
 import platform
 import time
-import math
 from datetime import datetime
-from typing import Callable, List
-from itertools import cycle
+from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
 import optuna
 import pandas as pd
 import psutil
-import shap
 import seaborn as sns
+import shap
 from jinja2 import Environment, FileSystemLoader
 from matplotlib import gridspec
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.metrics import (
     accuracy_score,
+    auc,
     balanced_accuracy_score,
     confusion_matrix,
     f1_score,
@@ -28,11 +28,8 @@ from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
 )
-from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import label_binarize
-from sklearn.metrics import roc_curve, auc
-
 
 from mamut.preprocessing.handlers import handle_outliers
 from mamut.utils.utils import model_param_dict, preprocessing_steps
@@ -181,28 +178,29 @@ class ModelEvaluator:
 
     report_template_path: str = os.path.join(os.path.dirname(__file__), "utils")
 
-    def __init__(self,
-                 models: dict,
-                 # X_test and y_test are preprocessed. X and y are not.
-                 X_test: np.ndarray,
-                 y_test: np.ndarray,
-                 X_train: np.ndarray,
-                 y_train: np.ndarray,
-                 X: pd.DataFrame,
-                 y: pd.Series,
-                 optimizer: str,
-                 n_trials: int,
-                 metric: str,
-                 studies: dict,
-                 training_summary: pd.DataFrame,
-                 pca_loadings,
-                 binary: bool,
-                 preprocessing_steps,
-                 is_ensemble: bool,
-                 greedy_ensemble,
-                 excluded_models: List[str] = None,
-                 n_top_models: int = 3,
-                 ):
+    def __init__(
+        self,
+        models: dict,
+        # X_test and y_test are preprocessed. X and y are not.
+        X_test: np.ndarray,
+        y_test: np.ndarray,
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X: pd.DataFrame,
+        y: pd.Series,
+        optimizer: str,
+        n_trials: int,
+        metric: str,
+        studies: dict,
+        training_summary: pd.DataFrame,
+        pca_loadings,
+        binary: bool,
+        preprocessing_steps,
+        is_ensemble: bool,
+        greedy_ensemble,
+        excluded_models: List[str] = None,
+        n_top_models: int = 3,
+    ):
 
         self.models = models
         self.X = X
@@ -225,7 +223,9 @@ class ModelEvaluator:
         else:
             self.pca = False
         if self.training_summary is None:
-            raise ValueError("You need to .fit() your models before evaluating them with .evaluate()")
+            raise ValueError(
+                "You need to .fit() your models before evaluating them with .evaluate()"
+            )
         self.preprocessing_steps = preprocessing_steps
         self.excluded_models = excluded_models if excluded_models else []
 
@@ -239,7 +239,6 @@ class ModelEvaluator:
         os.makedirs(self.plot_output_path, exist_ok=True)
         self._set_plt_style()
 
-
     def _set_plt_style(self) -> None:
         sns.set_context("notebook", font_scale=1.05)
         plt.style.use("fivethirtyeight")
@@ -252,15 +251,39 @@ class ModelEvaluator:
 
     def plot_results_in_notebook(self):
         if self.binary:
-            self._plot_roc_auc_curve(training_summary=self.training_summary, n_top=self.n_top_models, show=True, save=False)
+            self._plot_roc_auc_curve(
+                training_summary=self.training_summary,
+                n_top=self.n_top_models,
+                show=True,
+                save=False,
+            )
         else:
-            self._plot_roc_auc_curve_multiclass(training_summary=self.training_summary, n_top=self.n_top_models, show=True, save=False)
-        self._plot_confusion_matrices(n_top=self.n_top_models, show=True, save=False, training_summary=self.training_summary)
-        self._plot_hyperparameter_tuning_history(n_top=self.n_top_models, show=True, save=False, training_summary=self.training_summary)
+            self._plot_roc_auc_curve_multiclass(
+                training_summary=self.training_summary,
+                n_top=self.n_top_models,
+                show=True,
+                save=False,
+            )
+        self._plot_confusion_matrices(
+            n_top=self.n_top_models,
+            show=True,
+            save=False,
+            training_summary=self.training_summary,
+        )
+        self._plot_hyperparameter_tuning_history(
+            n_top=self.n_top_models,
+            show=True,
+            save=False,
+            training_summary=self.training_summary,
+        )
         return
 
     def _plot_roc_auc_curve(
-        self, training_summary: pd.DataFrame, n_top: int = 3, show: bool = False, save: bool = True
+        self,
+        training_summary: pd.DataFrame,
+        n_top: int = 3,
+        show: bool = False,
+        save: bool = True,
     ) -> None:
         fig, ax = plt.subplots(figsize=(12, 6))
         top_models = training_summary["Model"].head(n_top).to_numpy()
@@ -295,9 +318,13 @@ class ModelEvaluator:
 
         return
 
-
-    def _plot_roc_auc_curve_multiclass(self, training_summary: pd.DataFrame, n_top: int = 3, show: bool = False,
-                                       save: bool = True) -> None:
+    def _plot_roc_auc_curve_multiclass(
+        self,
+        training_summary: pd.DataFrame,
+        n_top: int = 3,
+        show: bool = False,
+        save: bool = True,
+    ) -> None:
         fig, ax = plt.subplots(figsize=(12, 6))
         top_models = training_summary["Model"].head(n_top).to_numpy()
         y_test_bin = label_binarize(self.y_test, classes=np.unique(self.y_test))
@@ -310,7 +337,12 @@ class ModelEvaluator:
             fpr, tpr, _ = roc_curve(y_test_bin.ravel(), y_score.ravel())
             roc_auc = auc(fpr, tpr)
 
-            ax.plot(fpr, tpr, lw=2, label=f'Micro-averaged {model_name} (area = {roc_auc:0.2f})')
+            ax.plot(
+                fpr,
+                tpr,
+                lw=2,
+                label=f"Micro-averaged {model_name} (area = {roc_auc:0.2f})",
+            )
 
         ax.plot([0, 1], [0, 1], "k--", lw=2)
         ax.set_xlim([-0.01, 1.0])
@@ -333,12 +365,15 @@ class ModelEvaluator:
 
         return
 
-
     def _plot_confusion_matrices(
-        self, training_summary: pd.DataFrame, n_top: int = 3, show: bool = False, save: bool = True
+        self,
+        training_summary: pd.DataFrame,
+        n_top: int = 3,
+        show: bool = False,
+        save: bool = True,
     ) -> None:
         rows = math.ceil(n_top / 3)
-        fig = plt.figure(figsize=(18, 5*rows))
+        fig = plt.figure(figsize=(18, 5 * rows))
         top_models = training_summary["Model"].head(n_top).to_numpy()
         if n_top == 3:
             gs = gridspec.GridSpec(1, 3, wspace=0.4)
@@ -376,7 +411,11 @@ class ModelEvaluator:
         return
 
     def _plot_hyperparameter_tuning_history(
-        self, training_summary: pd.DataFrame, n_top: int = 3, show: bool = False, save: bool = True
+        self,
+        training_summary: pd.DataFrame,
+        n_top: int = 3,
+        show: bool = False,
+        save: bool = True,
     ) -> None:
         self._set_plt_style()
         top_models = training_summary["Model"].head(n_top).to_numpy()
@@ -463,7 +502,10 @@ class ModelEvaluator:
 
                 if save:
                     plt.savefig(
-                        os.path.join(self.plot_output_path, f"shap_beeswarm_class_{class_idx}.png"),
+                        os.path.join(
+                            self.plot_output_path,
+                            f"shap_beeswarm_class_{class_idx}.png",
+                        ),
                         format="png",
                         bbox_inches="tight",
                     )
@@ -490,18 +532,25 @@ class ModelEvaluator:
 
     def _plot_pca_loadings(self, show: bool = False, save: bool = True) -> None:
         if self.pca_loadings is None:
-            raise ValueError("PCA loadings are not available. "
-                             "Potentially PCA was not used in the preprocessing steps."
-                             "Use Mamut(pca=True) to include PCA in the preprocessing steps.")
+            raise ValueError(
+                "PCA loadings are not available. "
+                "Potentially PCA was not used in the preprocessing steps."
+                "Use Mamut(pca=True) to include PCA in the preprocessing steps."
+            )
 
         self._set_plt_style()
         sns.set_palette(sns.color_palette("tab20", 20))
 
         plt.figure(figsize=(12, 8))
-        sns.heatmap(self.pca_loadings, annot=False, cmap="coolwarm", xticklabels=self.X.columns,
-                    yticklabels=[f'PC{i + 1}' for i in range(self.pca_loadings.shape[0])])
-        plt.xlabel('Features', fontsize=12)
-        plt.ylabel('Principal Components', fontsize=12)
+        sns.heatmap(
+            self.pca_loadings,
+            annot=False,
+            cmap="coolwarm",
+            xticklabels=self.X.columns,
+            yticklabels=[f"PC{i + 1}" for i in range(self.pca_loadings.shape[0])],
+        )
+        plt.xlabel("Features", fontsize=12)
+        plt.ylabel("Principal Components", fontsize=12)
         plt.tight_layout()
 
         if save:
@@ -518,9 +567,11 @@ class ModelEvaluator:
 
     def _plot_pca_loadings2(self, show: bool = False, save: bool = True) -> None:
         if self.pca_loadings is None:
-            raise ValueError("PCA loadings are not available. "
-                             "Potentially PCA was not used in the preprocessing steps."
-                             "Use Mamut(pca=True) to include PCA in the preprocessing steps.")
+            raise ValueError(
+                "PCA loadings are not available. "
+                "Potentially PCA was not used in the preprocessing steps."
+                "Use Mamut(pca=True) to include PCA in the preprocessing steps."
+            )
         self._set_plt_style()
         sns.set_palette(sns.color_palette("tab20", 20))
         n_components = self.pca_loadings.shape[0]
@@ -528,14 +579,18 @@ class ModelEvaluator:
 
         plt.figure(figsize=(10, 6))
         for i in range(n_components):
-            plt.bar(np.arange(n_features) + i / n_components, self.pca_loadings[i],
-                    width=1 / n_components, label=f'PC{i + 1}')
+            plt.bar(
+                np.arange(n_features) + i / n_components,
+                self.pca_loadings[i],
+                width=1 / n_components,
+                label=f"PC{i + 1}",
+            )
 
-        plt.xlabel('Features', fontsize=12)
-        plt.ylabel('Loadings', fontsize=12)
-        plt.title('PCA Loadings', fontsize=14)
+        plt.xlabel("Features", fontsize=12)
+        plt.ylabel("Loadings", fontsize=12)
+        plt.title("PCA Loadings", fontsize=14)
         plt.xticks(np.arange(n_features), self.X.columns, rotation=90)
-        plt.legend(loc='best')
+        plt.legend(loc="best")
         plt.tight_layout()
 
         if save:
@@ -549,7 +604,6 @@ class ModelEvaluator:
         plt.close()
 
         return
-
 
     def _generate_greedy_ensemble_results_html(self, greedy_ensemble):
         """
@@ -687,8 +741,12 @@ class ModelEvaluator:
             is_ensemble=self.is_ensemble,
             ensemble_method="Stacking",
             ensemble_list=_generate_ensemble_list(self.greedy_ensemble),
-            ensemble_summary=self._generate_greedy_ensemble_results_html(self.greedy_ensemble),
-            preprocessing_list=_generate_preprocessing_steps_html(self.preprocessing_steps)
+            ensemble_summary=self._generate_greedy_ensemble_results_html(
+                self.greedy_ensemble
+            ),
+            preprocessing_list=_generate_preprocessing_steps_html(
+                self.preprocessing_steps
+            ),
         )
 
         time_signature = datetime.strptime(
@@ -729,6 +787,7 @@ class ModelEvaluator:
             **results,
         }
         return results
+
 
 def _highlight_first_cell(s):
     return [

@@ -1,7 +1,6 @@
 import numpy as np
 
 from mamut.wrapper import Mamut
-from tests.mock import X, X_missing, binary_y, imbalanced_y, multiclass_y
 
 
 def test_wrapper_binary_target(X, binary_y):
