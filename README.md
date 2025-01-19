@@ -1,6 +1,6 @@
 <div align="center">
 <img src="docs/source/_static/logo.webp" alt="MAMUT Logo" width="200"/>
-  
+
 # Machine Automated Modelling and Utility Toolkit
 </div>
 
