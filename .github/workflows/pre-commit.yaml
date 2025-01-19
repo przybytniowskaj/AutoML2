@@ -1,15 +1,15 @@
-name: CI Pipeline
+name: Pre-commit Pipeline
 
 on:
   push:
     branches:
-      - main
+      - '**'
   pull_request:
     branches:
-      - main
+      - '**'
 
 jobs:
-  test:
+  precommit:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: '3.12.8'
 
       - name: Install dependencies
         run: |
@@ -29,7 +29,3 @@ jobs:
       - name: Run pre-commit hooks
         run: |
           poetry run pre-commit run --all-files
-
-      - name: Run tests
-        run: |
-          poetry run pytest

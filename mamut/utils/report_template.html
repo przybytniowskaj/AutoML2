@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Evaluation Report</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0 20px 20px;
+        background-color: #e0f0ff; /* skyblue */
+    }
+    h1, h2 {
+        color: #003366; /* navyblue */
+    }
+    h3 {
+        text-decoration: underline;
+        color: #003366; /* navyblue */
+
+    }
+    p , ul {
+        text-align: left;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 1em;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+    }
+    table thead tr {
+        background-color: #007bb5; /* skyblue */
+        color: #ffffff;
+        text-align: left;
+    }
+    table th, table td {
+        padding: 12px 15px;
+    }
+    table th {
+        text-align: center;
+    }
+    table tbody tr {
+        border-bottom: 1px solid #dddddd;
+    }
+    table tbody tr:nth-of-type(even) {
+        background-color: #e0f0ff; /* skyblue */
+    }
+    table tbody tr:last-of-type {
+        border-bottom: 2px solid #007bb5; /* skyblue */
+    }
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+    .dataset-overview {
+        list-style-type: none;
+        padding: 0;
+        width: 50%;
+        margin: 0 auto;
+    }
+    .dataset-overview li {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #ddd;
+    }
+    .dataset-overview li:last-of-type {
+        border-bottom: none;
+    }
+    .header {
+        //background-color: #ffffff; /* skyblue */
+        color: #ffffff;
+        padding: 0 0;
+        text-align: center;
+        margin-top: 0;
+    }
+
+    .heading {
+        background-color: #75c4e8; /* skyblue */
+        color: #171616;
+        padding: 20px 0;
+        text-align: center;
+        border-radius: 10px;
+    }
+
+    .heading2 {
+        text-decoration: underline;
+        text-align: center;
+    }
+
+    .section {
+        text-align: center;
+        padding: 20px;
+        margin: 20px 0;
+        background-color: #f0f8ff; /* aliceblue */
+        border: 2px solid #007bb5;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+</style>
+</head>
+<body>
+    <div class="header">
+        <img src="data:image/png;base64, {{ image_header }}" alt="Mamut Logo" style="width: 30%; margin-top:0; padding-top:0;">
+    </div>
+
+    <div class="heading">
+        <h1>Model Evaluation Report</h1>
+        <p style="text-align: center">Report generated on {{ time_signature }}</p>
+    </div>
+
+    <div class="heading2">
+        <h2>Experiment Setup</h2>
+    </div>
+    <div class="section">
+        {{ experiment_setup | safe }}
+    </div>
+
+    <div class="heading2">
+        <h2>Dataset Overview</h2>
+    </div>
+    <div class="section">
+        <p>Below is an overview of the dataset used in this evaluation:</p>
+        <ul class="dataset-overview">
+            <li><b>Number of Samples:</b> <span>{{ basic_dataset_info[0] }}</span></li>
+            <li><b>Number of Features:</b> <span>{{ basic_dataset_info[1] }}</span></li>
+            <li><b>Number of rows with missing data:</b> <span>{{ basic_dataset_info[2] }}</span></li>
+            <li><b>Number of outliers:</b> <span>{{ basic_dataset_info[3] }}</span></li>
+        </ul>
+
+        <h3>Feature Summary:</h3>
+        {% if basic_dataset_info[1] > 10 %}
+            <p>Note: The feature summary is only for the first 10 features.</p>
+        {% endif %}
+        <div style="width: 50%; margin: 0 auto;">
+            {{ feature_summary | safe }}
+        </div>
+
+        <h3>Class Distribution:</h3>
+        <div style="width: 50%; margin: 0 auto;">
+            {{ class_distribution | safe }}
+        </div>
+        <h3 style="text-decoration: none; color:black;">Detected Task: {% if binary %} Binary Classification {% else %}
+        MultiClass Classification {% endif %}</h3>
+    </div>
+
+
+    <div class="heading2">
+        <h2>Preprocessing</h2>
+    </div>
+    <div class="section">
+        <div style="display: flex; justify-content: space-between;">
+            <div style="width: 40%; margin-left:5%;">
+                <p>Below you will see a list of <b>preprocessing steps</b> performed on the dataset before any
+                    models were applied. Preprocessing steps are divided into categories of tasks that
+                    they are responsible for. The selection of certain steps can be highly configured
+                    with parameters passed to Mamut Classifier. Some steps are <b>dynamically</b> selected
+                    based on the dataset characteristics (e.g. PowerTransformer for skewed features).
+                </p>
+            </div>
+            <div style="width: 1px; background-color: #ddd; margin: 0 1vw;"></div>
+            <div style="width: 40%; margin-right:5%;">
+                <p>Pipeline:</p>
+                <ul style="list-style-type:'&#8627;'">
+                    {{ preprocessing_list | safe }}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% if pca %}
+    <div class="heading2">
+        <h2>PCA Components</h2>
+    </div>
+    <div class="section">
+        <p>
+            Below you will see the results of the <b>Principal Component Analysis (PCA)</b> performed on the dataset.
+            PCA is a dimensionality reduction technique that is used to reduce the number of features in the dataset.
+            The results below show the input of each feature to the principal components.
+        </p>
+        <img src="plots/pca_loadings_heatmap.png" alt="PCA Components">
+    </div>
+    {% endif %}
+
+    <div class="heading">
+        <h1>Model Evaluation</h1>
+    </div>
+    <div class="section">
+        <p> Below you will see the results of the model evaluation. The list of models tested during this
+            training session includes:</p>
+        <ul>
+            {% for model in models_evaluated %}
+                <li>{{ model }}</li>
+            {% endfor %}
+        </ul>
+        <p>
+            Each model has been tuned for optimal performance using the hyperparameter tuning in Optuna.
+            The optimizer used for tuning was: <b>{{ optimizer }}</b>. Optimization was performed with
+            respect to the metric: <b>{{ metric }}</b> for <b>{{ n_trials }}</b> iterations. Access any model's
+            hyperparameters by getting the models from <i>mamut.raw_fitted_models_</i> field and running <i>.get_params()</i> on
+            your model of interest. <br>
+            After tuning, all models were evaluated on the <b>test set</b> that was split from the original dataset.
+            The best model was <b><i>{{ best_model }}</i></b>.
+        </p>
+    </div>
+
+    <div class="heading2">
+        <h2>Training Summary</h2>
+    </div>
+    <div class="section">
+        {{ training_summary | safe }}
+    </div>
+
+    <div class="heading2">
+        <h2>Receiver Operating Characteristic (ROC) Curve for top 3 models</h2>
+    </div>
+    <div class="section">
+        <img src="plots/roc_auc_curve.png" alt="ROC AUC Curve">
+    </div>
+
+    <div class="heading2">
+        <h2>Confusion Matrix for top 3 models</h2>
+    </div>
+    <div class="section">
+        <img src="plots/confusion_matrices.png" alt="Confusion Matrix">
+    </div>
+
+    <div class="heading2">
+        <h2>Detailed Hyperparameter Tuning History for top 3 models</h2>
+    </div>
+    <div class="section" style="display: flex; justify-content: space-between;">
+        <img src="plots/hyperparameter_tuning_history_1.png" alt="Hyperparameter Tuning History 1" style="width: 32%;">
+        <img src="plots/hyperparameter_tuning_history_2.png" alt="Hyperparameter Tuning History 2" style="width: 32%;">
+        <img src="plots/hyperparameter_tuning_history_3.png" alt="Hyperparameter Tuning History 3" style="width: 32%;">
+    </div>
+
+    {% if is_ensemble %}
+    <div class="heading">
+        <h1>Ensemble Model</h1>
+    </div>
+    <div class="section">
+        <div style="display: flex; justify-content: space-between;">
+            <div style="width: 45%; margin-left:5%;">
+                <p>
+                    Below you will see the evaluation of the ensemble model. The ensemble model was created
+                    by combining individual models using the <b>{{ ensemble_method }}</b> method.
+                    {% if ensemble_method == 'Stacking' %} The meta-learner used was <b>RandomForestClassifier</b>. {% endif %}
+                    The models for the ensemble were selected using greedy approach with respect to the metric: <b>{{ metric }}</b>.
+                    The best ensemble model was selected.
+                </p>
+            </div>
+            <div style="width: 1px; background-color: #ddd; margin: 0 1vw;"></div>
+            <div style="width: 45%; margin-right:5%;">
+                <p><b>Ensemble Stacking Model:</b></p>
+                <ul style="list-style-type:'&#8627;'">
+                    {{ ensemble_list | safe }}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="section">
+        <p>The results of the powerful greedy ensemble created during the experiment
+        on the <b>test set</b> are available in the below table.</p>
+        {{ ensemble_summary | safe }}
+    </div>
+    {% endif %}
+
+    <div class="heading">
+        <h1>Interpretability</h1>
+    </div>
+    <div class="heading2">
+        <h2>Feature Importance</h2>
+    </div>
+    <div class="section">
+        <p>
+            Below you will see the feature importances in the dataset. Feature importance is calculated
+            using the <b>{{ feature_importance_method }}</b> method. The method used to calculate feature importance
+            is based on the model type. For example, tree-based models use the Gini importance, while linear models
+            use the coefficients. The feature importance is calculated using the <b>training set</b> and is used to
+            determine the most important features for the model.
+        </p>
+        <img src="plots/feature_importance.png" alt="Feature Importance">
+    </div>
+
+    <div class="heading2">
+        <h2>SHAP Values for Best Model</h2>
+    </div>
+    <div class="section">
+<!--        <p>-->
+<!--            Below you will see the SHAP values for the best model. SHAP values provide a way to interpret the impact of each feature on the model's output.-->
+<!--            The SHAP values are calculated using the <b>test set</b> and are used to explain the predictions of the model. On the beeswarm plot below,-->
+<!--            each point represents a single prediction, and the <b>color</b> represents the <b>feature value</b>. The <b>x-axis</b> represents the <b>SHAP value</b>, and on the-->
+<!--            <b>y-axis</b> are the <b>top 10 features</b>.-->
+<!--        </p>-->
+        <p>
+            Below you will see the SHAP values for the best model. SHAP values provide a way to interpret the impact of each feature on the model's output.
+            Each point on the summary plot represents one feature value of one observation.
+            The position on the y-axis is determined by the feature importance and on the x-axis by the Shapley value.
+            The color represents the value of the feature from low to high. Overlapping points are jittered in
+            y-axis direction, so we get a sense of the distribution of the Shapley values per feature.
+        </p>
+        <p>
+            1. <b>X-Axis Spread:</b> A wider spread signifies varying importance levels of that feature across the dataset.
+        </p>
+        <p>
+            2. <b>Relative Impact:</b> Features with points shifted to the right (higher SHAP values) indicate more substantial positive contributions, while those shifted to the left (lower SHAP values) represent negative contributions.
+        </p>
+        <p>
+            3. <b>Overall Importance:</b> Features on the Y-Axis are ordered by importance, with the most important features at the top.
+        </p>
+        <p>
+            4. <b>Comparative Importance:</b> Features with more spread-out or consistently shifted points might hold higher significance in the model’s predictions.
+        </p>
+        {% if not binary %}
+        <p>
+            5. <b>Multiclass Classification:</b> The SHAP values can only be display for each class separately, so we display it for class with label 0.
+        </p>
+        {% endif %}
+
+        <img src="plots/shap_values.png" alt="SHAP Values">
+    </div>
+
+</body>
+</html>
