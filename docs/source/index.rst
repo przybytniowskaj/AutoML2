@@ -18,5 +18,6 @@ documentation for details.
    :caption: Contents:
 
    installation
+   notebooks/walkthrough
    modules
    mamut.preprocessing
