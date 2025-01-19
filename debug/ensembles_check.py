@@ -1,8 +1,5 @@
 import pandas as pd
 import sklearn.datasets
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 
 from mamut.wrapper import Mamut
@@ -28,15 +25,12 @@ if __name__ == "__main__":
     mamut.fit(X_train, y_train)
     print("Fitted")
 
-
     ensemble = mamut.create_greedy_ensemble()
 
     print(ensemble)
     mamut.evaluate()
 
     # print(accuracy_score(y_test, ensemble.predict(pd.DataFrame(X_test))))
-
-
 
     # best_model = mamut.best_model_
     # print(

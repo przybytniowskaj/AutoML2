@@ -5,10 +5,14 @@ from copy import copy
 from typing import List, Literal, Optional
 
 import joblib
-import pandas as pd
 import numpy as np
+import pandas as pd
 from sklearn.base import clone
-from sklearn.ensemble import VotingClassifier, StackingClassifier, RandomForestClassifier
+from sklearn.ensemble import (
+    RandomForestClassifier,
+    StackingClassifier,
+    VotingClassifier,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
@@ -206,13 +210,12 @@ class Mamut:
             X_train, y_train = self.preprocessor.fit_transform(X_train, y_train)
             X_test = self.preprocessor.transform(X_test)
 
-        self.X_train = X_train # np.ndarray
-        self.X_test = X_test # np.ndarray
-        self.y_train = y_train # np.ndarray
-        self.y_test = y_test # pd.Series
+        self.X_train = X_train  # np.ndarray
+        self.X_test = X_test  # np.ndarray
+        self.y_train = y_train  # np.ndarray
+        self.y_test = y_test  # pd.Series
         self.X = X
         self.y = y
-
 
         self.model_selector = ModelSelector(
             X_train,
@@ -462,7 +465,6 @@ class Mamut:
 
         return self.greedy_ensemble_
 
-
     def create_greedy_ensemble(self, max_models=6):
         self._check_fitted()
         models = [model for name, model in self.raw_fitted_models_.items()]
@@ -471,36 +473,38 @@ class Mamut:
             max_models = len(models)
             log.info(
                 f"Max models set to {max_models} as there are only {len(models)} models available"
-                f"in the bag-of-models used in this experiment.")
-
+                f"in the bag-of-models used in this experiment."
+            )
 
         # Sort models list by their performance on X_test
-        sorted_models = sorted(models,
-                               key=lambda model: self._score_model_on_test(model),
-                               reverse=True
-                               )
+        sorted_models = sorted(
+            models, key=lambda model: self._score_model_on_test(model), reverse=True
+        )
 
         # Start with the best and second best model
         ensemble_models = [sorted_models[0], sorted_models[1]]
-        remaining_models = {model.__class__.__name__: model for model in copy(sorted_models[2:])}
+        remaining_models = {
+            model.__class__.__name__: model for model in copy(sorted_models[2:])
+        }
         best_score = self._score_model_on_test(
-                                       self._create_stacking_classifier(ensemble_models)
-                                       .fit(self.X_train, self.y_train)
-                                       )
+            self._create_stacking_classifier(ensemble_models).fit(
+                self.X_train, self.y_train
+            )
+        )
         ensemble_scores = [best_score]
 
         # Greedily add models to the ensemble
-        for i in range(max_models - 2):
+        for _ in range(max_models - 2):
             best_score = 0
             best_model = None
 
             for model in remaining_models.values():
                 candidate_ensemble = ensemble_models + [model]
-                candidate_stacking_clf = self._create_stacking_classifier(candidate_ensemble)
-                candidate_stacking_clf.fit(self.X_train, self.y_train)
-                score = self._score_model_on_test(
-                    candidate_stacking_clf
+                candidate_stacking_clf = self._create_stacking_classifier(
+                    candidate_ensemble
                 )
+                candidate_stacking_clf.fit(self.X_train, self.y_train)
+                score = self._score_model_on_test(candidate_stacking_clf)
 
                 if score > best_score:
                     best_score = score
@@ -516,7 +520,7 @@ class Mamut:
         # Check from the end of the list to find the best ensemble
         for i in range(len(ensemble_scores) - 1, 0, -1):
             if ensemble_scores[i] == best_score:
-                ensemble_models = ensemble_models[:i + 2]
+                ensemble_models = ensemble_models[: i + 2]
                 break
 
         # Create the final stacking classifier
@@ -524,8 +528,10 @@ class Mamut:
         final_stacking_clf.fit(self.X_train, self.y_train)
         self.greedy_ensemble_ = final_stacking_clf
 
-        log.info(f"Created greedy ensemble with {len(ensemble_models)} models. Best score: {best_score:.4f}."
-                 f"For details on the ensemble please run evaluate() method and see the report.")
+        log.info(
+            f"Created greedy ensemble with {len(ensemble_models)} models. Best score: {best_score:.4f}."
+            f"For details on the ensemble please run evaluate() method and see the report."
+        )
 
         # Create a pipeline with the best ensemble
         self.greedy_ensemble_ = Pipeline(
@@ -550,11 +556,11 @@ class Mamut:
             )
         return score_on_test
 
-
     def _create_stacking_classifier(self, models):
         estimators = [(model.__class__.__name__, clone(model)) for model in models]
-        return StackingClassifier(estimators=estimators, final_estimator=RandomForestClassifier())
-
+        return StackingClassifier(
+            estimators=estimators, final_estimator=RandomForestClassifier()
+        )
 
     def _calculate_disagreement(self, model1, model2, X_test):
         #  TODO: THIS IS WORK IN PROGRESS... DO NOT USE
@@ -563,10 +569,15 @@ class Mamut:
         pred2 = model2.predict(X_test)
         return np.mean(pred1 != pred2)
 
-    def _ensemble_selection(self, max_ensemble_size=5, voting: Literal["soft", "hard"] = "soft"):
+    def _ensemble_selection(
+        self, max_ensemble_size=5, voting: Literal["soft", "hard"] = "soft"
+    ):
         """Greedy algorithm to select the best subset of models for ensemble."""
         #  TODO: THIS IS WORK IN PROGRESS... DO NOT USE
-        models = [(model.__class__.__name__, model) for model in self.raw_fitted_models_.values()]
+        models = [
+            (model.__class__.__name__, model)
+            for model in self.raw_fitted_models_.values()
+        ]
         print(models)
         selected_models = []
         remaining_models = models.copy()
@@ -574,7 +585,10 @@ class Mamut:
         ensemble_performance = []
 
         # Initialize with the best performing model on test set
-        scores = {name: self.score_metric(self.y_test, model.predict(self.X_test)) for name, model in models}
+        scores = {
+            name: self.score_metric(self.y_test, model.predict(self.X_test))
+            for name, model in models
+        }
         print("Scores:", scores)
         best_model_name, best_model = max(scores.items(), key=lambda item: item[1])
         print("Best model:", best_model_name, "with score:", best_model)
@@ -591,16 +605,28 @@ class Mamut:
             best_new_score = best_score
             for name, model in remaining_models:
                 # Test current ensemble with this model added
-                current_ensemble = VotingClassifier(estimators=selected_models + [(name, model)], voting=voting)
+                current_ensemble = VotingClassifier(
+                    estimators=selected_models + [(name, model)], voting=voting
+                )
                 current_ensemble.fit(self.X_train, self.y_train)
-                ensemble_score = self.score_metric(self.y_test, current_ensemble.predict(self.X_test))
+                ensemble_score = self.score_metric(
+                    self.y_test, current_ensemble.predict(self.X_test)
+                )
 
                 # Compute diversity with selected models
-                diversity = np.mean([self._calculate_disagreement(model, selected_model[1], self.X_test)
-                                     for selected_model in selected_models])
+                diversity = np.mean(
+                    [
+                        self._calculate_disagreement(
+                            model, selected_model[1], self.X_test
+                        )
+                        for selected_model in selected_models
+                    ]
+                )
 
                 # Score considering both accuracy improvement and diversity
-                weighted_score = ensemble_score + 0.1 * diversity  # 0.1 is a diversity weight factor
+                weighted_score = (
+                    ensemble_score + 0.1 * diversity
+                )  # 0.1 is a diversity weight factor
                 if weighted_score > best_new_score:
                     best_model_to_add = (name, model)
                     best_new_score = weighted_score
@@ -610,7 +636,9 @@ class Mamut:
                 remaining_models.remove(best_model_to_add)
                 best_score = best_new_score
                 ensemble_performance.append(best_new_score)
-                print(f"Added {best_model_to_add[0]} to ensemble, new weighted score: {best_new_score}")
+                print(
+                    f"Added {best_model_to_add[0]} to ensemble, new weighted score: {best_new_score}"
+                )
             else:
                 break  # No improvement
 
