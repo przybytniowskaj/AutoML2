@@ -4,11 +4,11 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.12"
-    path: .
 
 python:
   install:
     - method: poetry
+      path: .
   system_packages: true
 
 sphinx:
