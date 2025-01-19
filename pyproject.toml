@@ -2,7 +2,7 @@
 name = "mamut"
 version = "0.1.0"
 description = "Machine Automated Modelling and Utility Toolkit"
-authors = ["Igor Kolodziej <igor.kolodziej@proton.me>", "Hubert Kowalski"}, "Julia Przybytniowska"]
+authors = ["Igor Kolodziej <igor.kolodziej@proton.me>", "Hubert Kowalski", "Julia Przybytniowska"]
 license = "MIT"
 readme = "README.md"
 
