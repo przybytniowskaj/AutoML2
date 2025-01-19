@@ -9,7 +9,10 @@
 [![Pre-commit Pipeline](https://github.com/przybytniowskaj/AutoML2/actions/workflows/pre-commit.yaml/badge.svg)](https://github.com/przybytniowskaj/AutoML2/actions/workflows/pre-commit.yaml)
 ![License](https://img.shields.io/github/license/przybytniowskaj/AutoML2)
 
-### Quick start Development
+### User guide and documentation
+For detailed instructions and resources, please visit [User Guide and Documentation](https://mamut.readthedocs.io/en/latest/).
+
+### Quick start development
 ```sh
 poetry install
 poetry run pre-commit install
