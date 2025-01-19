@@ -1,6 +1,7 @@
 import numpy as np
 
 from mamut.preprocessing.preprocessing import Preprocessor
+from tests.mock import X, binary_y
 
 
 def test_preprocessor_binary_y(X, binary_y):
